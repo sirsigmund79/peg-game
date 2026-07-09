@@ -3,8 +3,8 @@
 // ----------------------------------------------------------------------------
 // This is the bridge between the pure game logic (logic/rules.js) and the
 // screen. It holds the CURRENT state of one round being played -- which
-// pegs are on the board, what's selected, the undo history, move count, and
-// whether the round has been won.
+// pegs (and which colors) are on the board, what's selected, the undo
+// history, move count, and whether the round has been won.
 //
 // Vue components (like Board.vue) read this state to know what to draw, and
 // call its functions (selectHole, undo, reset) in response to taps. This
@@ -14,36 +14,42 @@
 
 import { reactive, computed } from 'vue';
 import {
-  createStartingMask,
+  createStartingMasks,
+  getOccupiedMask,
+  getColorAt,
   findLegalMoves,
   applyMove,
   isRoundOver,
   countPegsRemaining,
-  getRankForPegCount,
+  getRankForOverPar,
 } from '../logic/rules.js';
 import { vibrateJump, vibrateRoundOver } from '../fx/haptics.js';
 import { playSound, playRoundOverChime, soundState } from '../fx/sound.js';
 import { recordResult } from '../logic/history.js';
 
+function sum(numbers) {
+  return numbers.reduce((total, value) => total + value, 0);
+}
+
 /**
  * Creates a fresh, playable game for one puzzle.
  *
- * @param {{geometry: object, emptyHoles: number[], par: number, cellCount: number}} puzzle
+ * @param {{geometry: object, holeColors: number[], colorCount: number, par: number[], cellCount: number}} puzzle
  *   a puzzle definition, e.g. from logic/daily.js's getTodaysPuzzle()
  * @returns the reactive game state and the functions to play it
  */
 export function useGame(puzzle) {
   const geometry = puzzle.geometry;
-  const startingMask = createStartingMask(puzzle.cellCount, puzzle.emptyHoles);
+  const startingMasks = createStartingMasks(puzzle.cellCount, puzzle.holeColors, puzzle.colorCount);
 
   // `state` is the one reactive object every other function below reads
   // from and writes to. Because it's created with Vue's reactive(), any
   // Vue component that reads these values will automatically re-render
   // when they change -- no manual "update the screen" code needed.
   const state = reactive({
-    mask: startingMask, // which holes currently have a peg (a bigint bitmask)
+    masks: startingMasks, // which holes currently have a peg, one bigint bitmask per color
     selectedHole: null, // index of the peg the player has tapped, or null
-    undoStack: [], // previous masks, so Undo can step backward
+    undoStack: [], // previous masks arrays, so Undo can step backward
     moveCount: 0,
     // The most recent jump's {from, over, to}, or null. A fresh object
     // every time (never mutated in place) so Board.vue can watch it and
@@ -51,16 +57,24 @@ export function useGame(puzzle) {
     lastMove: null,
   });
 
-  const pegsRemaining = computed(() => countPegsRemaining(state.mask));
+  const pegsRemaining = computed(() => countPegsRemaining(state.masks));
 
-  const roundOver = computed(() => isRoundOver(state.mask, geometry.moves));
+  const roundOver = computed(() => isRoundOver(state.masks, geometry.moves));
 
-  // The player has WON once no moves remain AND they reached the puzzle's
-  // par (usually 1 peg). If the round is over but they didn't reach par,
-  // that's a loss (they got stuck early).
-  const hasWon = computed(() => roundOver.value && pegsRemaining.value === puzzle.par);
+  // How many MORE pegs, in total, the player currently has left than the
+  // puzzle's solver-proven best (par) -- the only measure that stays
+  // meaningful across boards with different color counts/par totals.
+  const overPar = computed(() => sum(pegsRemaining.value) - sum(puzzle.par));
 
-  const rank = computed(() => getRankForPegCount(pegsRemaining.value));
+  // The player has WON once no moves remain AND every color matches this
+  // exact puzzle's solver-proven target. If the round is over but that
+  // isn't true, that's a loss (they got stuck early, or a color settled
+  // higher than optimal).
+  const hasWon = computed(
+    () => roundOver.value && pegsRemaining.value.every((count, colorIndex) => count === puzzle.par[colorIndex])
+  );
+
+  const rank = computed(() => getRankForOverPar(overPar.value));
 
   // Every legal move the selected peg could make right now (the full
   // {from, over, to} triples, not just the landing holes) -- Board.vue uses
@@ -68,16 +82,22 @@ export function useGame(puzzle) {
   // connector lines leading to them.
   const validMoves = computed(() => {
     if (state.selectedHole === null) return [];
-    return findLegalMoves(state.mask, geometry.moves, state.selectedHole);
+    return findLegalMoves(state.masks, geometry.moves, state.selectedHole);
   });
 
   // Just the landing-hole side of validMoves, for the common case of
   // "which holes should light up".
   const validTargetHoles = computed(() => validMoves.value.map((move) => move.to));
 
-  /** @returns {boolean} true if hole `index` currently has a peg. */
+  /** @returns {boolean} true if hole `index` currently has a peg (of any color). */
   function holeHasPeg(index) {
-    return (state.mask & (1n << BigInt(index))) !== 0n;
+    const bit = 1n << BigInt(index);
+    return (getOccupiedMask(state.masks) & bit) !== 0n;
+  }
+
+  /** @returns {number} the color index of the peg at `index`, or -1 if empty. */
+  function getHoleColor(index) {
+    return getColorAt(state.masks, index);
   }
 
   /**
@@ -107,7 +127,8 @@ export function useGame(puzzle) {
     // Otherwise: if it's a peg, select it (or switch selection to it). If
     // it's an empty hole with no relevance right now, ignore the tap --
     // unless a peg WAS selected, in which case the player just tried an
-    // illegal jump, which is worth a distinct "nope" sound.
+    // illegal jump (a different color, or nothing to jump over), which is
+    // worth a distinct "nope" sound.
     if (holeHasPeg(index)) {
       state.selectedHole = index;
       playSound('select');
@@ -130,8 +151,8 @@ export function useGame(puzzle) {
    * @param {{from:number, over:number, to:number}} move
    */
   function jump(move) {
-    state.undoStack.push(state.mask);
-    state.mask = applyMove(state.mask, move);
+    state.undoStack.push(state.masks);
+    state.masks = applyMove(state.masks, move);
     state.moveCount += 1;
     state.selectedHole = null;
     state.lastMove = move;
@@ -142,11 +163,11 @@ export function useGame(puzzle) {
     // deliberate stop rather than the game just going quiet on you.
     vibrateJump();
     playSound('move');
-    const roundJustEnded = isRoundOver(state.mask, geometry.moves);
+    const roundJustEnded = isRoundOver(state.masks, geometry.moves);
     if (roundJustEnded) {
       vibrateRoundOver();
-      const finalPegsRemaining = countPegsRemaining(state.mask);
-      const won = finalPegsRemaining === puzzle.par;
+      const finalPegsRemaining = countPegsRemaining(state.masks);
+      const won = finalPegsRemaining.every((count, colorIndex) => count === puzzle.par[colorIndex]);
       // Scheduled to start once the move sound's tone has finished, rather
       // than stacking both sounds on top of each other.
       playRoundOverChime(soundState.move.duration);
@@ -154,7 +175,8 @@ export function useGame(puzzle) {
       // puzzles, so components/ArchiveView.vue has nothing to show for
       // them -- there's nothing worth recording.
       if (puzzle.puzzleNumber !== null) {
-        recordResult(puzzle.puzzleNumber, { pegsRemaining: finalPegsRemaining, won });
+        const overParAtEnd = sum(finalPegsRemaining) - sum(puzzle.par);
+        recordResult(puzzle.puzzleNumber, { pegsRemaining: finalPegsRemaining, overPar: overParAtEnd, won });
       }
     }
   }
@@ -162,7 +184,7 @@ export function useGame(puzzle) {
   /** Undoes the most recent jump, if there is one. Unlimited undos. */
   function undo() {
     if (state.undoStack.length === 0) return;
-    state.mask = state.undoStack.pop();
+    state.masks = state.undoStack.pop();
     state.moveCount = Math.max(0, state.moveCount - 1);
     state.selectedHole = null;
     state.lastMove = null;
@@ -171,7 +193,7 @@ export function useGame(puzzle) {
 
   /** Resets the board back to the puzzle's starting position. */
   function reset() {
-    state.mask = startingMask;
+    state.masks = startingMasks;
     state.selectedHole = null;
     state.lastMove = null;
     state.undoStack = [];
@@ -188,12 +210,14 @@ export function useGame(puzzle) {
     geometry,
     par: puzzle.par,
     pegsRemaining,
+    overPar,
     roundOver,
     hasWon,
     rank,
     validMoves,
     validTargetHoles,
     holeHasPeg,
+    getHoleColor,
     selectHole,
     undo,
     reset,

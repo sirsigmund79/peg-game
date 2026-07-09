@@ -5,7 +5,7 @@
   Every past daily puzzle, newest first, grouped by month -- pick one to
   play it. If this device has already finished a given day, its rank badge
   (the same GENIUS / Purty smart / ... wording as the in-game result
-  screen, see logic/rules.js's getRankForPegCount()) shows instead of a
+  screen, see logic/rules.js's getRankForOverPar()) shows instead of a
   bare "Play" button, using logic/history.js's locally-recorded results.
 
   Navigating to a puzzle just changes the URL to "#/play/<number>" (see
@@ -17,7 +17,7 @@
 import { computed } from 'vue';
 import { getTodayPuzzleNumber, getPuzzleForNumber } from '../logic/daily.js';
 import { getHistory } from '../logic/history.js';
-import { getRankForPegCount } from '../logic/rules.js';
+import { getRankForOverPar } from '../logic/rules.js';
 import { useRouter } from '../composables/useRouter.js';
 import PuzzleGlyph from './PuzzleGlyph.vue';
 
@@ -61,7 +61,7 @@ const monthGroups = computed(() => {
       emptyHoles: puzzle.emptyHoles,
       pegCount: puzzle.cellCount - puzzle.emptyHoles.length,
       isToday: puzzleNumber === todayNumber,
-      result: savedResult ? { ...savedResult, ...getRankForPegCount(savedResult.pegsRemaining) } : null,
+      result: savedResult ? { ...savedResult, ...getRankForOverPar(savedResult.overPar) } : null,
     });
   }
 

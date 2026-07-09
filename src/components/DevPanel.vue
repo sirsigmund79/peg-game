@@ -58,7 +58,7 @@ function loadNextOfType(boardId) {
       Now viewing
       <template v-if="currentPuzzle.puzzleNumber !== null">#{{ currentPuzzle.puzzleNumber }} ({{ currentPuzzle.date }})</template>
       <template v-else>a custom design</template>
-      &middot; {{ currentPuzzle.boardName }} &middot; par {{ currentPuzzle.par }}
+      &middot; {{ currentPuzzle.boardName }} &middot; par [{{ currentPuzzle.par.join(', ') }}]
     </p>
     <p class="dev-current">Pool: {{ poolCoverage.days }} unique puzzles (~{{ poolCoverage.years }} years before any repeat)</p>
 

@@ -23,13 +23,13 @@ function wait(milliseconds) {
  * Runs the solver on a board position and reports the best possible
  * outcome ("Calculate Max"), without touching the actual game state.
  *
- * @param {{moves: {from:number, over:number, to:number}[]}} geometry
- * @param {bigint} mask
- * @returns {{minPegs: number, move: object|null}}
+ * @param {{moves: {from:number, over:number, to:number}[], cellCount: number}} geometry
+ * @param {bigint[]} masks
+ * @returns {{minPegs: number, perColor: number[], move: object|null}}
  */
-export function calculateBestOutcome(geometry, mask) {
-  const solver = createSolver(geometry.moves);
-  return solver.findBest(mask);
+export function calculateBestOutcome(geometry, masks) {
+  const solver = createSolver(geometry.moves, geometry.cellCount);
+  return solver.findBest(masks);
 }
 
 /**
@@ -37,19 +37,19 @@ export function calculateBestOutcome(geometry, mask) {
  * without applying any of them to the real game -- just returns the list
  * of moves.
  *
- * @param {{moves: object[]}} geometry
- * @param {bigint} startingMask
+ * @param {{moves: object[], cellCount: number}} geometry
+ * @param {bigint[]} startingMasks
  * @returns {{from:number, over:number, to:number}[]}
  */
-export function planFullSolution(geometry, startingMask) {
-  const solver = createSolver(geometry.moves);
+export function planFullSolution(geometry, startingMasks) {
+  const solver = createSolver(geometry.moves, geometry.cellCount);
   const moves = [];
-  let mask = startingMask;
+  let masks = startingMasks;
   while (true) {
-    const best = solver.findBest(mask);
+    const best = solver.findBest(masks);
     if (!best.move) break;
     moves.push(best.move);
-    mask = applyMove(mask, best.move);
+    masks = applyMove(masks, best.move);
   }
   return moves;
 }
@@ -65,7 +65,7 @@ export function planFullSolution(geometry, startingMask) {
  * @returns {Promise<void>} resolves once every move has been played
  */
 export async function watchSolve(game, delayBetweenMovesMs = 500) {
-  const moves = planFullSolution(game.geometry, game.state.mask);
+  const moves = planFullSolution(game.geometry, game.state.masks);
 
   for (const move of moves) {
     game.selectHole(move.from);

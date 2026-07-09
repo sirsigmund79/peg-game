@@ -14,18 +14,23 @@
 <script setup>
 import { computed } from 'vue';
 import { computeDisplayPositions, computeHoleDiameterPercent } from '../logic/boardLayout.js';
-import { isFilled } from '../logic/rules.js';
+import { getColorAt } from '../logic/rules.js';
+import { getPegColor } from '../logic/pegColors.js';
 
 const props = defineProps({
   geometry: { type: Object, required: true },
-  mask: { required: true }, // final bigint bitmask -- which holes still have a peg
+  masks: { type: Array, required: true }, // final bigint bitmasks -- which holes still have a peg, one per color
 });
 
 const positions = computed(() => computeDisplayPositions(props.geometry));
 const holeSizePercent = computed(() => computeHoleDiameterPercent(props.geometry, positions.value));
 
+function holeColor(index) {
+  return getColorAt(props.masks, index);
+}
+
 function holeHasPeg(index) {
-  return isFilled(props.mask, index);
+  return holeColor(index) !== -1;
 }
 </script>
 
@@ -38,7 +43,7 @@ function holeHasPeg(index) {
       :class="{ filled: holeHasPeg(index) }"
       :style="{ left: position.left, top: position.top }"
     >
-      <span v-if="holeHasPeg(index)" class="peg" aria-hidden="true"></span>
+      <span v-if="holeHasPeg(index)" class="peg" :style="{ backgroundColor: getPegColor(holeColor(index)).hex }" aria-hidden="true"></span>
     </div>
   </div>
 </template>
@@ -68,7 +73,7 @@ function holeHasPeg(index) {
   width: 72%;
   height: 72%;
   border-radius: 50%;
-  background-color: var(--color-peg);
+  /* background-color set inline per-peg -- see holeColor()/getPegColor() above. */
   filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.15));
 }
 </style>

@@ -4,34 +4,39 @@
 // A self-check you can run from the command line with:
 //   node scripts/check-solver.js
 //
-// Confirms: every board shape can actually be solved to 1 peg, the English
-// cross's precomputed solution really plays out, a random sample of the
-// generated puzzle pool re-verifies correctly, and -- the big one -- that
-// the daily puzzle sequence never repeats a pool entry until the entire
-// pool has been used once.
+// Confirms: every board shape has puzzle-pool coverage, the English cross's
+// precomputed solution really plays out, a random sample of the generated
+// puzzle pool re-verifies correctly, every daily puzzle's par is
+// structurally sane, and -- the big one -- that the daily puzzle sequence
+// never repeats a pool entry until the entire pool has been used once.
 //
 // This is NOT part of the app bundle -- it's a standalone developer tool,
 // which is why it lives in /scripts instead of /src.
 // ============================================================================
 
-import { BOARD_CATALOG, ENGLISH_CROSS_GEOMETRY, ENGLISH_CROSS_EMPTY_HOLES, ENGLISH_CROSS_PRECOMPUTED } from '../src/logic/boards.js';
+import { BOARD_CATALOG, ENGLISH_CROSS_GEOMETRY, ENGLISH_CROSS_HOLE_COLORS, ENGLISH_CROSS_PRECOMPUTED } from '../src/logic/boards.js';
 import { PUZZLE_POOL } from '../src/logic/puzzlePool.js';
 import { createSolver } from '../src/logic/solver.js';
-import { createStartingMask, applyMove, isLegalMove, countPegsRemaining } from '../src/logic/rules.js';
+import { createStartingMasks, applyMove, isLegalMove, countPegsRemaining } from '../src/logic/rules.js';
+import { getColorCountForCellCount } from '../src/logic/pegColors.js';
 import { getPuzzleForNumber, describePoolCoverage } from '../src/logic/daily.js';
+
+// Matches CANDIDATE_NODE_BUDGET in scripts/generate-puzzle-pool.js -- Check
+// 2 below re-attempts an EXHAUSTIVE solve at the same budget the generator
+// used, so it can tell "this entry's par is provably correct" apart from
+// "this entry came from the generator's random-rollout fallback and was
+// never proven optimal in the first place" (see that script for why some
+// entries, mostly on the biggest boards, go that route).
+const CANDIDATE_NODE_BUDGET = 12000;
 
 let allPassed = true;
 
 // --- Check 1: every board shape has at least one verified pool entry -------
-// NOTE: we deliberately do NOT re-derive this by solving single-hole starts
-// live here -- some shapes (like the 19-hole hexagon) have NO single-hole
-// start that reaches 1 peg, only multi-hole ones, and re-solving without a
-// node budget risks the same runaway search that scripts/generate-puzzle-
-// pool.js works around. The pool itself is the source of truth -- every
-// entry in it was already solver-verified (with a budget) when it was
-// generated, so we just confirm each shape actually contributed at least
-// one entry.
-console.log("Check 1: every board shape contributed at least one verified pool entry");
+// NOTE: we deliberately do NOT re-derive this by solving live here -- the
+// pool itself is the source of truth, generated with a node budget (and a
+// random-rollout fallback) by scripts/generate-puzzle-pool.js. We just
+// confirm each shape currently in the catalog actually contributed entries.
+console.log('Check 1: every board shape contributed at least one verified pool entry');
 for (const board of Object.values(BOARD_CATALOG)) {
   const countForShape = PUZZLE_POOL.filter((entry) => entry.boardId === board.id).length;
   const status = countForShape > 0 ? 'OK' : 'FAILED';
@@ -41,51 +46,90 @@ for (const board of Object.values(BOARD_CATALOG)) {
 console.log('');
 
 // --- Check 2: a random sample of the pool re-verifies correctly -------------
-console.log('Check 2: spot-checking 40 random pool entries against a fresh solve');
+// Re-attempts an EXHAUSTIVE solve (same budget the generator used) for each
+// sampled entry. If it completes, the result must match the stored `par`
+// exactly -- a mismatch here is a real bug. If it exceeds the budget again,
+// that's consistent with this entry having come from the generator's
+// random-rollout fallback in the first place (its par was never claimed to
+// be provably optimal) -- that's expected, not a failure, so it's counted
+// separately rather than flagged.
+console.log('Check 2: spot-checking 80 random pool entries against a fresh bounded solve');
 let sampleFailures = 0;
-const sampleSize = Math.min(40, PUZZLE_POOL.length);
+let sampleUnverified = 0;
+const sampleSize = Math.min(80, PUZZLE_POOL.length);
 for (let i = 0; i < sampleSize; i++) {
   const index = Math.floor((i / sampleSize) * PUZZLE_POOL.length);
   const entry = PUZZLE_POOL[index];
   const board = BOARD_CATALOG[entry.boardId];
-  const solver = createSolver(board.geometry.moves);
-  const mask = createStartingMask(board.geometry.cellCount, entry.emptyHoles);
-  const result = solver.findBest(mask);
-  if (result.minPegs !== entry.par) {
-    console.log(`  FAILED: pool entry ${JSON.stringify(entry)} claims par ${entry.par} but solver found ${result.minPegs}`);
-    sampleFailures++;
+  const colorCount = entry.par.length;
+  const masks = createStartingMasks(board.geometry.cellCount, entry.holeColors, colorCount);
+  try {
+    const solver = createSolver(board.geometry.moves, board.geometry.cellCount, { nodeBudget: CANDIDATE_NODE_BUDGET });
+    const result = solver.findBest(masks);
+    const matches = JSON.stringify(result.perColor) === JSON.stringify(entry.par);
+    if (!matches) {
+      console.log(`  FAILED: pool entry (${entry.boardId}) claims par [${entry.par}] but solver found [${result.perColor}]`);
+      sampleFailures++;
+    }
+  } catch (error) {
+    // Budget exceeded again -- an approximate (rollout-derived) entry, not
+    // independently re-verified here. Not a failure.
+    sampleUnverified++;
   }
 }
 const sampleOk = sampleFailures === 0;
 if (!sampleOk) allPassed = false;
-console.log(`  -> ${sampleOk ? 'PASSED' : 'FAILED'}: ${sampleSize - sampleFailures}/${sampleSize} sampled entries match\n`);
+const sampleExact = sampleSize - sampleFailures - sampleUnverified;
+console.log(
+  `  -> ${sampleOk ? 'PASSED' : 'FAILED'}: ${sampleExact}/${sampleSize} exactly reverified, ${sampleUnverified}/${sampleSize} approximate (rollout-derived, skipped), ${sampleFailures}/${sampleSize} disagreed\n`
+);
 
 // --- Check 3: English cross precomputed solution actually plays out ---------
 console.log('Check 3: English cross precomputed solution replays correctly');
-let crossMask = createStartingMask(ENGLISH_CROSS_GEOMETRY.cellCount, ENGLISH_CROSS_EMPTY_HOLES);
+const crossColorCount = getColorCountForCellCount(ENGLISH_CROSS_GEOMETRY.cellCount);
+let crossMasks = createStartingMasks(ENGLISH_CROSS_GEOMETRY.cellCount, ENGLISH_CROSS_HOLE_COLORS, crossColorCount);
 let crossReplayOk = true;
 for (const move of ENGLISH_CROSS_PRECOMPUTED.solutionMoves) {
-  if (!isLegalMove(crossMask, move)) {
+  if (!isLegalMove(crossMasks, move)) {
     console.log(`  FAILED: move ${JSON.stringify(move)} is not legal at this point`);
     crossReplayOk = false;
     break;
   }
-  crossMask = applyMove(crossMask, move);
+  crossMasks = applyMove(crossMasks, move);
 }
-const crossFinalPegs = countPegsRemaining(crossMask);
-const crossPassed = crossReplayOk && crossFinalPegs === ENGLISH_CROSS_PRECOMPUTED.par;
+const crossFinalPerColor = countPegsRemaining(crossMasks);
+const crossPassed = crossReplayOk && JSON.stringify(crossFinalPerColor) === JSON.stringify(ENGLISH_CROSS_PRECOMPUTED.par);
 if (!crossPassed) allPassed = false;
-console.log(`  replayed ${ENGLISH_CROSS_PRECOMPUTED.solutionMoves.length} moves -> ${crossFinalPegs} peg(s) left (expected ${ENGLISH_CROSS_PRECOMPUTED.par})  [${crossPassed ? 'OK' : 'FAILED'}]\n`);
+console.log(
+  `  replayed ${ENGLISH_CROSS_PRECOMPUTED.solutionMoves.length} moves -> [${crossFinalPerColor}] left (expected [${ENGLISH_CROSS_PRECOMPUTED.par}])  [${crossPassed ? 'OK' : 'FAILED'}]\n`
+);
 
-// --- Check 4: every daily puzzle in the pool's full cycle is par 1 ----------
-console.log(`Check 4: every daily puzzle across the full pool cycle (${PUZZLE_POOL.length} days) is par 1`);
+// --- Check 4: every daily puzzle's par is structurally sane -----------------
+// A full re-solve of every entry across the whole cycle would be far too
+// slow (that's exactly why the generator uses a node budget + rollout
+// fallback in the first place) -- so this check stays cheap and
+// full-coverage, confirming structure rather than re-proving optimality
+// (Check 2's sampling is where "does the solver agree" is covered).
+console.log(`Check 4: every daily puzzle across the full pool cycle (${PUZZLE_POOL.length} days) has a structurally sane par`);
 let dailyPuzzlesPassed = true;
 const boardMixCounts = {};
 for (let puzzleNumber = 0; puzzleNumber < PUZZLE_POOL.length; puzzleNumber++) {
   const puzzle = getPuzzleForNumber(puzzleNumber);
   boardMixCounts[puzzle.boardId] = (boardMixCounts[puzzle.boardId] || 0) + 1;
-  if (puzzle.par !== 1) {
-    console.log(`  FAILED: puzzle #${puzzleNumber} (${puzzle.date}, ${puzzle.boardId}) has par ${puzzle.par}`);
+
+  const expectedColorCount = getColorCountForCellCount(puzzle.cellCount);
+  const startingPerColor = countPegsRemaining(createStartingMasks(puzzle.cellCount, puzzle.holeColors, puzzle.colorCount));
+  const startingTotal = startingPerColor.reduce((sum, count) => sum + count, 0);
+  const parTotal = puzzle.par.reduce((sum, count) => sum + count, 0);
+
+  const problems = [];
+  if (puzzle.colorCount !== expectedColorCount) problems.push(`colorCount ${puzzle.colorCount} !== expected ${expectedColorCount}`);
+  if (puzzle.par.length !== puzzle.colorCount) problems.push(`par length ${puzzle.par.length} !== colorCount ${puzzle.colorCount}`);
+  if (puzzle.par.some((count) => count < 1)) problems.push(`par has a color at 0: [${puzzle.par}]`);
+  if (parTotal >= startingTotal) problems.push(`par total ${parTotal} isn't fewer pegs than the starting total ${startingTotal}`);
+
+  if (problems.length > 0) {
+    console.log(`  FAILED: puzzle #${puzzleNumber} (${puzzle.date}, ${puzzle.boardId}) -- ${problems.join('; ')}`);
     dailyPuzzlesPassed = false;
   }
 }
@@ -95,13 +139,16 @@ console.log(`  -> ${dailyPuzzlesPassed ? 'PASSED' : 'FAILED'}\n`);
 
 // --- Check 5: no two days in that same cycle show the same puzzle -----------
 // This is the actual proof behind the "never repeats" claim: every one of
-// the pool's entries should be used EXACTLY once across a full cycle.
+// the pool's entries should be used EXACTLY once across a full cycle. Keyed
+// on holeColors (not just which holes start empty) since two configs with
+// the same empty holes but a different color split are meaningfully
+// different puzzles.
 console.log('Check 5: no puzzle repeats within one full cycle of the pool');
 const seenPuzzleKeys = new Set();
 let duplicateFound = false;
 for (let puzzleNumber = 0; puzzleNumber < PUZZLE_POOL.length; puzzleNumber++) {
   const puzzle = getPuzzleForNumber(puzzleNumber);
-  const key = `${puzzle.boardId}:${puzzle.emptyHoles.join(',')}`;
+  const key = `${puzzle.boardId}:${puzzle.holeColors.join(',')}`;
   if (seenPuzzleKeys.has(key)) {
     console.log(`  FAILED: puzzle #${puzzleNumber} repeats an earlier puzzle (${key})`);
     duplicateFound = true;

@@ -25,6 +25,7 @@
 import { computed, ref, onMounted, onBeforeUnmount } from 'vue';
 import { buildShareText, copyTextToClipboard } from '../services/viral.js';
 import { getRankClimbSequence } from '../logic/rules.js';
+import { getPegColor } from '../logic/pegColors.js';
 import { useRouter } from '../composables/useRouter.js';
 import MiniBoard from './MiniBoard.vue';
 
@@ -41,7 +42,7 @@ const { navigate } = useRouter();
 // bottom) just shows that tier directly -- there's nothing worse to climb
 // past.
 
-const climbSequence = computed(() => getRankClimbSequence(props.game.pegsRemaining));
+const climbSequence = computed(() => getRankClimbSequence(props.game.overPar));
 const climbStepIndex = ref(0);
 const settled = ref(climbSequence.value.length <= 1);
 const displayedTier = computed(() => climbSequence.value[climbStepIndex.value]);
@@ -93,14 +94,7 @@ const formattedDate = computed(() => {
   });
 });
 
-const shareText = computed(() =>
-  buildShareText({
-    dateLabel: formattedDate.value,
-    pegsRemaining: props.game.pegsRemaining,
-    bestPossible: props.game.par,
-    rankLabel: props.game.rank.rank,
-  })
-);
+const shareText = computed(() => buildShareText({ pegsRemaining: props.game.pegsRemaining }));
 
 const shareStatusMessage = ref('');
 
@@ -125,15 +119,23 @@ function goToArchive() {
     </header>
 
     <div class="result-card">
-      <MiniBoard class="mini-board" :geometry="game.geometry" :mask="game.state.mask" />
+      <MiniBoard class="mini-board" :geometry="game.geometry" :masks="game.state.masks" />
 
       <div class="stat-row">
         <div class="stat">
-          <span class="stat-value">{{ game.par }}</span>
+          <span class="stat-value multi">
+            <span v-for="(count, colorIndex) in game.par" :key="colorIndex" class="color-count">
+              <span class="dot" :style="{ background: getPegColor(colorIndex).hex }" aria-hidden="true"></span>{{ count }}
+            </span>
+          </span>
           <span class="stat-label">Best possible</span>
         </div>
         <div class="stat">
-          <span class="stat-value">{{ game.pegsRemaining }}</span>
+          <span class="stat-value multi">
+            <span v-for="(count, colorIndex) in game.pegsRemaining" :key="colorIndex" class="color-count">
+              <span class="dot" :style="{ background: getPegColor(colorIndex).hex }" aria-hidden="true"></span>{{ count }}
+            </span>
+          </span>
           <span class="stat-label">Your score</span>
         </div>
       </div>
@@ -255,6 +257,25 @@ function goToArchive() {
   font-size: 1.5rem;
   line-height: 1;
   color: var(--color-ink);
+}
+
+.stat-value.multi {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.color-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.dot {
+  width: 0.6em;
+  height: 0.6em;
+  border-radius: 50%;
+  flex: 0 0 auto;
 }
 
 .stat-label {

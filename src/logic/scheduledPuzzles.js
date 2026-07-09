@@ -8,6 +8,11 @@
 // so "scheduling" a puzzle just means committing an entry here and
 // deploying, exactly like any other code change.
 //
+// Emptied out during the multi-color rework: the editor's `cellStates`
+// format changed (a peg cell is now a color index, not the string 'peg'),
+// so any previously hand-scheduled single-color puzzle isn't compatible
+// with today's format. New ones can be authored with the reworked editor.
+//
 // HOW TO ADD ONE
 // 1. Design (or open) a puzzle in the Editor and click "Copy for
 //    scheduling" next to it in "My Puzzles". That copies a ready-to-paste
@@ -22,11 +27,8 @@
 // ============================================================================
 
 /**
- * @type {Record<string, {boardName: string, rows: number, cols: number, cellStates: string[], par: number}>}
+ * @type {Record<string, {boardName: string, rows: number, cols: number, cellStates: (string|number)[], colorCount: number, par: number[]}>}
  */
 export const SCHEDULED_PUZZLES = {
-  // "2026-08-01": { boardName: "Launch Special", rows: 9, cols: 9, cellStates: [...], par: 1 },
-    "2026-07-08": { boardName: "Weird guy", rows: 6, cols: 6, cellStates: ["none","peg","none","none","none","none","peg","peg","peg","none","none","none","none","peg","peg","peg","peg","empty","none","peg","peg","peg","peg","none","none","peg","peg","peg","none","none","none","none","none","peg","peg","none"], par: 1 },
-      "2026-07-07": { boardName: "Almost an arrow", rows: 6, cols: 5, cellStates: ["peg","none","none","none","none","none","peg","none","none","peg","none","peg","peg","peg","none","none","peg","empty","peg","none","none","peg","peg","peg","peg","peg","none","none","none","none"], par: 1 },
-      "2026-07-09": { boardName: "Martini Glass", rows: 5, cols: 6, cellStates: ["peg","peg","peg","peg","peg","peg","none","peg","peg","empty","peg","none","none","none","empty","peg","none","none","none","none","peg","peg","none","none","none","peg","peg","peg","peg","none"], par: 1 },
-    };
+  // "2026-08-01": { boardName: "Launch Special", rows: 9, cols: 9, cellStates: [...], colorCount: 3, par: [1, 1, 1] },
+};

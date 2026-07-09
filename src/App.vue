@@ -21,7 +21,7 @@ import ArchiveView from './components/ArchiveView.vue';
 import DevToolsView from './components/DevToolsView.vue';
 import SoundToggleButton from './components/SoundToggleButton.vue';
 
-useTheme(); // applies the default theme's CSS variables to the page -- see composables/useTheme.js for the full catalog (not currently exposed as a front-end option)
+useTheme(); // applies the Moose theme's CSS variables to the page -- see composables/useTheme.js
 
 // Vite sets import.meta.env.DEV to true for `npm run dev` and false for a
 // production `npm run build` -- reading it into a plain variable here
@@ -55,7 +55,7 @@ const page = computed(() => {
           <a href="#/archive" class="nav-link" :class="{ active: page === 'archive' }">Archive</a>
         </nav>
       </div>
-      <p class="tagline">Hop pegs over each other until just one is left.</p>
+      <p class="tagline">Hop same-color pegs over each other until each color is down to its best.</p>
     </header>
 
     <main class="app">

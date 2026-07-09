@@ -86,23 +86,45 @@ function buildEnglishCrossCells() {
 export const ENGLISH_CROSS_GEOMETRY = makeGridGeometry(buildEnglishCrossCells());
 export const ENGLISH_CROSS_EMPTY_HOLES = [findCellIndex(ENGLISH_CROSS_GEOMETRY, 3, 3)];
 
-// Filled in by scripts/precompute-english-cross.js. `par` should be 1 and
-// `solutionMoves` is a full sequence of {from, over, to} triples that takes
-// the board from its start down to that one peg.
+// Filled in by scripts/precompute-english-cross.js -- holeColors[i] is the
+// color index (0..3) of the peg starting at hole i, or -1 for the one
+// starting empty hole (the center).
+export const ENGLISH_CROSS_HOLE_COLORS = [
+  3, 3, 3, 3, 3, 0, 1, 1, 1, 3, 0, 0, 0, 1, 1, 1, -1, 0, 0, 0, 1, 1, 1, 2, 0, 0, 0, 2, 2, 0, 2, 2, 2,
+];
+
+// Filled in by scripts/precompute-english-cross.js. `par` is the fewest
+// pegs of each color (index-aligned with color) the solver proved
+// achievable, and `solutionMoves` is a full sequence of {from, over, to}
+// triples that takes the board from its start down to that result.
 export const ENGLISH_CROSS_PRECOMPUTED = {
-  par: 1,
+  par: [2, 1, 2, 2],
   solutionMoves: [
-    { from: 4, over: 9, to: 16 }, { from: 7, over: 8, to: 9 }, { from: 0, over: 3, to: 8 },
-    { from: 2, over: 1, to: 0 }, { from: 9, over: 8, to: 7 }, { from: 6, over: 7, to: 8 },
-    { from: 10, over: 5, to: 2 }, { from: 12, over: 11, to: 10 }, { from: 14, over: 8, to: 4 },
-    { from: 2, over: 4, to: 8 }, { from: 15, over: 8, to: 3 }, { from: 0, over: 3, to: 8 },
-    { from: 17, over: 16, to: 15 }, { from: 15, over: 8, to: 3 }, { from: 18, over: 10, to: 4 },
-    { from: 3, over: 4, to: 5 }, { from: 20, over: 13, to: 6 }, { from: 26, over: 19, to: 12 },
-    { from: 27, over: 22, to: 15 }, { from: 28, over: 24, to: 18 }, { from: 25, over: 18, to: 11 },
-    { from: 12, over: 11, to: 10 }, { from: 5, over: 10, to: 17 }, { from: 32, over: 29, to: 24 },
-    { from: 17, over: 24, to: 29 }, { from: 30, over: 31, to: 32 }, { from: 32, over: 29, to: 24 },
-    { from: 24, over: 23, to: 22 }, { from: 15, over: 22, to: 27 }, { from: 27, over: 21, to: 13 },
+    { from: 4, over: 9, to: 16 },
+    { from: 18, over: 10, to: 4 },
+    { from: 12, over: 11, to: 10 },
+    { from: 25, over: 17, to: 9 },
+    { from: 9, over: 10, to: 11 },
+    { from: 7, over: 8, to: 9 },
+    { from: 20, over: 14, to: 8 },
     { from: 6, over: 13, to: 20 },
+    { from: 26, over: 19, to: 12 },
+    { from: 29, over: 24, to: 17 },
+    { from: 27, over: 28, to: 29 },
+    { from: 12, over: 11, to: 10 },
+    { from: 9, over: 8, to: 7 },
+    { from: 0, over: 3, to: 8 },
+    { from: 15, over: 22, to: 27 },
+    { from: 32, over: 29, to: 24 },
+    { from: 23, over: 24, to: 25 },
+    { from: 4, over: 10, to: 18 },
+    { from: 17, over: 18, to: 19 },
+    { from: 27, over: 21, to: 13 },
+    { from: 2, over: 1, to: 0 },
+    { from: 20, over: 13, to: 6 },
+    { from: 8, over: 16, to: 24 },
+    { from: 6, over: 7, to: 8 },
+    { from: 30, over: 31, to: 32 },
   ],
 };
 
@@ -117,11 +139,17 @@ export const ENGLISH_CROSS_PRECOMPUTED = {
 // on every load -- its search tree is the one exception that's too slow
 // for that pattern (see solver.js notes).
 // ----------------------------------------------------------------------------
+// NOTE: the star shape (STAR_GEOMETRY, still built above) is deliberately
+// left out of the catalog for now -- pulled during the multi-color beta
+// since it doesn't need "hundreds of puzzles" worth of every shape yet.
+// Re-adding it later is a one-line change: add back
+// `star: { id: 'star', name: 'Star', geometry: STAR_GEOMETRY, liveSolve: true },`
+// below, then rerun scripts/generate-puzzle-pool.js (it already supports
+// this shape -- see SHAPES_TO_ENUMERATE there).
 export const BOARD_CATALOG = {
   triangle: { id: 'triangle', name: 'Triangle', geometry: TRIANGLE_GEOMETRY, liveSolve: true },
   heart: { id: 'heart', name: 'Heart', geometry: HEART_GEOMETRY, liveSolve: true },
   hexagon: { id: 'hexagon', name: 'Hexagon', geometry: HEXAGON_GEOMETRY, liveSolve: true },
-  star: { id: 'star', name: 'Star', geometry: STAR_GEOMETRY, liveSolve: true },
   square: { id: 'square', name: 'Square', geometry: SQUARE_GEOMETRY, liveSolve: true },
   diamond: { id: 'diamond', name: 'Diamond', geometry: DIAMOND_GEOMETRY, liveSolve: true },
   octagon: { id: 'octagon', name: 'Octagon', geometry: OCTAGON_GEOMETRY, liveSolve: true },
