@@ -31,11 +31,14 @@ import { createSolver, SolverBudgetExceededError } from '../src/logic/solver.js'
 import { createStartingMasks, findLegalMoves, applyMove, countPegsRemaining } from '../src/logic/rules.js';
 import { getColorCountForCellCount, assignHoleColors } from '../src/logic/pegColors.js';
 
-// Shapes we enumerate offline. English cross is deliberately left out --
-// its board is too big to solve hundreds of times in a row (see
-// solver.js), so it ships with just its one known-good center-empty start
-// instead (added separately, below).
-const SHAPES_TO_ENUMERATE = ['triangle', 'heart', 'hexagon', 'star', 'square', 'diamond', 'octagon'];
+// Shapes we enumerate offline -- everything currently in BOARD_CATALOG
+// except English cross, which is deliberately left out: its board is too
+// big to solve hundreds of times in a row (see solver.js), so it ships with
+// just its one known-good center-empty start instead (added separately,
+// below). Star is currently pulled from BOARD_CATALOG entirely (see
+// boards.js) for the beta, so it's skipped here too even though this
+// enumeration logic already supports it.
+const SHAPES_TO_ENUMERATE = ['triangle', 'heart', 'hexagon', 'square', 'diamond', 'octagon'];
 
 // Trying EVERY pair of empty holes is fast on small boards, but on a big,
 // densely-connected board (like the 37-hole star) both the number of pairs

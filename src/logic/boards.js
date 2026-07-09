@@ -139,11 +139,17 @@ export const ENGLISH_CROSS_PRECOMPUTED = {
 // on every load -- its search tree is the one exception that's too slow
 // for that pattern (see solver.js notes).
 // ----------------------------------------------------------------------------
+// NOTE: the star shape (STAR_GEOMETRY, still built above) is deliberately
+// left out of the catalog for now -- pulled during the multi-color beta
+// since it doesn't need "hundreds of puzzles" worth of every shape yet.
+// Re-adding it later is a one-line change: add back
+// `star: { id: 'star', name: 'Star', geometry: STAR_GEOMETRY, liveSolve: true },`
+// below, then rerun scripts/generate-puzzle-pool.js (it already supports
+// this shape -- see SHAPES_TO_ENUMERATE there).
 export const BOARD_CATALOG = {
   triangle: { id: 'triangle', name: 'Triangle', geometry: TRIANGLE_GEOMETRY, liveSolve: true },
   heart: { id: 'heart', name: 'Heart', geometry: HEART_GEOMETRY, liveSolve: true },
   hexagon: { id: 'hexagon', name: 'Hexagon', geometry: HEXAGON_GEOMETRY, liveSolve: true },
-  star: { id: 'star', name: 'Star', geometry: STAR_GEOMETRY, liveSolve: true },
   square: { id: 'square', name: 'Square', geometry: SQUARE_GEOMETRY, liveSolve: true },
   diamond: { id: 'diamond', name: 'Diamond', geometry: DIAMOND_GEOMETRY, liveSolve: true },
   octagon: { id: 'octagon', name: 'Octagon', geometry: OCTAGON_GEOMETRY, liveSolve: true },
