@@ -53,7 +53,7 @@ const TRIPLE_HOLE_CELL_COUNT_LIMIT = 20;
 // prove either way) rather than let it run for a very long time. A few
 // genuinely-solvable-but-slow candidates will get skipped by this -- that's
 // a fine trade, since thousands of other candidates fill the pool anyway.
-const CANDIDATE_NODE_BUDGET = 40000;
+const CANDIDATE_NODE_BUDGET = 12000;
 
 // A candidate is only worth playing if solving it actually clears out a
 // meaningful number of pegs -- this replaces the old single-color game's
