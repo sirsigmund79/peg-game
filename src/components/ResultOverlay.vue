@@ -15,8 +15,10 @@
        MiniBoard.vue) styled like the real board tray, with the best-
        possible and actual peg counts underneath.
     3. FOOTER: one full-width "Share Score" button that copies a spoiler-
-       safe result line to the clipboard, and a second button to the
-       archive.
+       safe result line to the clipboard -- including the puzzle's date and
+       a direct link back to that exact day, so sharing an archive day
+       sends people there, not just to today's puzzle -- and a second
+       button to the archive.
   This component is purely presentational -- it reads the final state from
   the `game` prop and formats the share text via services/viral.js.
   ============================================================================
@@ -94,7 +96,13 @@ const formattedDate = computed(() => {
   });
 });
 
-const shareText = computed(() => buildShareText({ pegsRemaining: props.game.pegsRemaining }));
+const shareText = computed(() =>
+  buildShareText({
+    pegsRemaining: props.game.pegsRemaining,
+    puzzleNumber: props.puzzle.puzzleNumber,
+    formattedDate: formattedDate.value,
+  })
+);
 
 const shareStatusMessage = ref('');
 

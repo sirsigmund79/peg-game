@@ -4,7 +4,10 @@
 // Everything related to sharing a result lives here: building the short,
 // spoiler-safe emoji summary, and copying it to the clipboard. Never
 // reveals the actual moves -- just a colored circle per peg color and how
-// many of that color were left, plus the site's URL.
+// many of that color were left, plus the puzzle's date and a direct link
+// back to that exact day (see logic/daily.js -- "#/play/<puzzleNumber>"
+// loads that specific day regardless of what "today" is when it's opened),
+// so sharing an archive day sends people to that day, not just today's.
 //
 // No Vue code lives here -- ResultOverlay.vue calls these plain functions
 // and just displays whatever comes back.
@@ -17,16 +20,20 @@ export const SITE_URL = 'https://dot-hop.pages.dev/';
 
 /**
  * Builds the short, spoiler-safe text people post when they share a result
- * -- just a colored circle emoji plus count per peg color, in color order,
- * followed by the site URL.
+ * -- the puzzle's date, a colored circle emoji plus count per peg color (in
+ * color order), and a link straight to that day's puzzle.
  *
  * @param {object} params
  * @param {number[]} params.pegsRemaining - final per-color peg counts, color-index order
+ * @param {number|null} [params.puzzleNumber] - the day's puzzle number (see logic/daily.js); omitted/null for a one-off custom design, which has no day to link to
+ * @param {string|null} [params.formattedDate] - the puzzle's date, already formatted for display (see ResultOverlay.vue's formattedDate); omitted/null for a custom design
  * @returns {string}
  */
-export function buildShareText({ pegsRemaining }) {
+export function buildShareText({ pegsRemaining, puzzleNumber = null, formattedDate = null }) {
   const emojiLine = pegsRemaining.map((count, colorIndex) => `${getPegColor(colorIndex).emoji}${count}`).join(' ');
-  return `${emojiLine}\n${SITE_URL}`;
+  const dateLine = formattedDate ? `Dot Hop — ${formattedDate}\n` : '';
+  const link = puzzleNumber === null ? SITE_URL : `${SITE_URL}#/play/${puzzleNumber}`;
+  return `${dateLine}${emojiLine}\n${link}`;
 }
 
 /**
