@@ -55,7 +55,7 @@ const page = computed(() => {
           <a href="#/archive" class="nav-link" :class="{ active: page === 'archive' }">Archive</a>
         </nav>
       </div>
-      <p class="tagline">Hop pegs over each other until just one is left.</p>
+      <p class="tagline">Hop same-color pegs over each other until each color is down to its best.</p>
     </header>
 
     <main class="app">
