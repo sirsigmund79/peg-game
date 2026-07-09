@@ -40,9 +40,68 @@ const HEART_CELLS = [
 export const HEART_GEOMETRY = makeGridGeometry(HEART_CELLS);
 
 // ----------------------------------------------------------------------------
+// Anvil (15 holes) -- a squat 5x4 block, notched unevenly top-left/top-right
+// ----------------------------------------------------------------------------
+const ANVIL_CELLS = [
+  { x: 1, y: 0 }, { x: 2, y: 0 },
+  { x: 0, y: 1 }, { x: 1, y: 1 }, { x: 2, y: 1 },
+  { x: 0, y: 2 }, { x: 1, y: 2 }, { x: 2, y: 2 }, { x: 3, y: 2 }, { x: 4, y: 2 },
+  { x: 0, y: 3 }, { x: 1, y: 3 }, { x: 2, y: 3 }, { x: 3, y: 3 }, { x: 4, y: 3 },
+];
+export const ANVIL_GEOMETRY = makeGridGeometry(ANVIL_CELLS);
+
+// ----------------------------------------------------------------------------
+// Ribbon (16 holes) -- a thick diagonal band, 4 cells wide the whole way
+// ----------------------------------------------------------------------------
+const RIBBON_CELLS = [
+  { x: 0, y: 0 }, { x: 1, y: 0 }, { x: 2, y: 0 }, { x: 3, y: 0 },
+  { x: 1, y: 1 }, { x: 2, y: 1 }, { x: 3, y: 1 }, { x: 4, y: 1 },
+  { x: 2, y: 2 }, { x: 3, y: 2 }, { x: 4, y: 2 }, { x: 5, y: 2 },
+  { x: 3, y: 3 }, { x: 4, y: 3 }, { x: 5, y: 3 }, { x: 6, y: 3 },
+];
+export const RIBBON_GEOMETRY = makeGridGeometry(RIBBON_CELLS);
+
+// ----------------------------------------------------------------------------
+// Boot (14 holes) -- a narrow ankle over a wide foot, like a chunky "L"
+// ----------------------------------------------------------------------------
+const BOOT_CELLS = [
+  { x: 0, y: 0 }, { x: 1, y: 0 }, { x: 2, y: 0 },
+  { x: 0, y: 1 }, { x: 1, y: 1 }, { x: 2, y: 1 },
+  { x: 0, y: 2 }, { x: 1, y: 2 }, { x: 2, y: 2 }, { x: 3, y: 2 }, { x: 4, y: 2 },
+  { x: 0, y: 3 }, { x: 1, y: 3 }, { x: 2, y: 3 }, { x: 3, y: 3 }, { x: 4, y: 3 },
+];
+export const BOOT_GEOMETRY = makeGridGeometry(BOOT_CELLS);
+
+// ----------------------------------------------------------------------------
 // Hexagon (19 holes) -- straight + diagonal jumps, on the triangular lattice
 // ----------------------------------------------------------------------------
 export const HEXAGON_GEOMETRY = makeHexagonGeometry(2);
+
+// ----------------------------------------------------------------------------
+// Kidney (23 holes) -- a 6x5 block with a staggered bite out of one corner
+// ----------------------------------------------------------------------------
+const KIDNEY_CELLS = [];
+for (let y = 0; y < 5; y++) {
+  for (let x = 0; x < 6; x++) {
+    if (y === 0 && x >= 2) continue; // top-right: widest bite
+    if (y === 1 && x >= 4) continue;
+    if (y === 2 && x >= 5) continue;
+    KIDNEY_CELLS.push({ x, y });
+  }
+}
+export const KIDNEY_GEOMETRY = makeGridGeometry(KIDNEY_CELLS);
+
+// ----------------------------------------------------------------------------
+// Crescent (22 holes) -- a thick, asymmetric arc across a 7x5 box
+// ----------------------------------------------------------------------------
+const CRESCENT_CELLS = [
+  { x: 2, y: 0 }, { x: 3, y: 0 }, { x: 4, y: 0 }, { x: 5, y: 0 },
+  { x: 0, y: 1 }, { x: 1, y: 1 }, { x: 2, y: 1 }, { x: 3, y: 1 },
+  { x: 0, y: 2 }, { x: 1, y: 2 }, { x: 2, y: 2 },
+  { x: 0, y: 3 }, { x: 1, y: 3 }, { x: 2, y: 3 }, { x: 3, y: 3 }, { x: 4, y: 3 },
+  { x: 1, y: 4 }, { x: 2, y: 4 }, { x: 3, y: 4 }, { x: 4, y: 4 }, { x: 5, y: 4 }, { x: 6, y: 4 },
+];
+export const CRESCENT_GEOMETRY = makeGridGeometry(CRESCENT_CELLS);
 
 // ----------------------------------------------------------------------------
 // Star / "combined triangles" (37 holes) -- two overlapping triangles
@@ -63,6 +122,25 @@ export const DIAMOND_GEOMETRY = makeDiamondGeometry(3);
 // Octagon (37 holes) -- straight + diagonal jumps
 // ----------------------------------------------------------------------------
 export const OCTAGON_GEOMETRY = makeOctagonGeometry(7, 2);
+
+// ----------------------------------------------------------------------------
+// Broken Square (29 holes) -- a 6x6 block missing a 2x3 notch from one
+// corner and a single-cell nick from the opposite corner
+// ----------------------------------------------------------------------------
+function buildBrokenSquareCells() {
+  const cells = [];
+  for (let y = 0; y < 6; y++) {
+    for (let x = 0; x < 6; x++) {
+      const isTopRightNotch = x >= 4 && y <= 2;
+      const isBottomLeftNick = x === 0 && y === 5;
+      if (!isTopRightNotch && !isBottomLeftNick) {
+        cells.push({ x, y });
+      }
+    }
+  }
+  return cells;
+}
+export const BROKEN_SQUARE_GEOMETRY = makeGridGeometry(buildBrokenSquareCells());
 
 // ----------------------------------------------------------------------------
 // English cross (33 holes) -- the "boss" board (straight + diagonal jumps)
@@ -149,10 +227,16 @@ export const ENGLISH_CROSS_PRECOMPUTED = {
 export const BOARD_CATALOG = {
   triangle: { id: 'triangle', name: 'Triangle', geometry: TRIANGLE_GEOMETRY, liveSolve: true },
   heart: { id: 'heart', name: 'Heart', geometry: HEART_GEOMETRY, liveSolve: true },
+  anvil: { id: 'anvil', name: 'Anvil', geometry: ANVIL_GEOMETRY, liveSolve: true },
+  ribbon: { id: 'ribbon', name: 'Ribbon', geometry: RIBBON_GEOMETRY, liveSolve: true },
+  boot: { id: 'boot', name: 'Boot', geometry: BOOT_GEOMETRY, liveSolve: true },
   hexagon: { id: 'hexagon', name: 'Hexagon', geometry: HEXAGON_GEOMETRY, liveSolve: true },
+  kidney: { id: 'kidney', name: 'Kidney', geometry: KIDNEY_GEOMETRY, liveSolve: true },
+  crescent: { id: 'crescent', name: 'Crescent', geometry: CRESCENT_GEOMETRY, liveSolve: true },
   square: { id: 'square', name: 'Square', geometry: SQUARE_GEOMETRY, liveSolve: true },
   diamond: { id: 'diamond', name: 'Diamond', geometry: DIAMOND_GEOMETRY, liveSolve: true },
   octagon: { id: 'octagon', name: 'Octagon', geometry: OCTAGON_GEOMETRY, liveSolve: true },
+  brokenSquare: { id: 'brokenSquare', name: 'Broken Square', geometry: BROKEN_SQUARE_GEOMETRY, liveSolve: true },
   englishCross: {
     id: 'englishCross',
     name: 'English Cross',

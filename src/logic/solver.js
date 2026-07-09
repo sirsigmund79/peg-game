@@ -45,6 +45,11 @@ function colorAt(masks, index) {
   return -1;
 }
 
+/** How many colors are already down to exactly 1 peg -- used to break ties between equally-optimal lines (see findBest below). */
+function countColorsAtOne(perColor) {
+  return perColor.reduce((count, pegs) => count + (pegs === 1 ? 1 : 0), 0);
+}
+
 /**
  * Builds a solver for one specific board shape. You pass in the board's
  * list of legal jump triples (from geometry.js) and its hole count (needed
@@ -130,7 +135,16 @@ export function createSolver(moveList, cellCount, options = {}) {
 
       const result = findBest(nextMasks);
 
-      if (result.minPegs < bestPegs) {
+      // Prefer a strictly lower total, and among ties for the lowest total
+      // prefer whichever line leaves more colors down at exactly 1 peg --
+      // purely a tie-break (it can never change `minPegs`/par), but it
+      // means a puzzle that CAN get some color to 1 is more likely to
+      // actually report that in its `par`/hint instead of an equally-
+      // optimal line that happens not to.
+      const better =
+        result.minPegs < bestPegs ||
+        (result.minPegs === bestPegs && countColorsAtOne(result.perColor) > countColorsAtOne(bestPerColor));
+      if (better) {
         bestPegs = result.minPegs;
         bestPerColor = result.perColor;
         bestMove = move;

@@ -89,7 +89,7 @@ watch(
     <div class="play-content">
       <p class="puzzle-line">
         <template v-if="formattedDate">{{ formattedDate }} &middot; </template>
-        {{ puzzle.boardName }} &middot; {{ puzzle.label }}
+        {{ puzzle.label }}
       </p>
 
       <div class="game-area">
