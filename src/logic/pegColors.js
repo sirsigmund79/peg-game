@@ -59,6 +59,11 @@ export function getColorCountForCellCount(cellCount) {
  * immediately. Clustering each color into its own connected neighborhood
  * gives it roughly the same jump density the classic single-color game had.
  *
+ * An occupied cell can end up with none of its own occupied neighbors left
+ * (every geometry-adjacent cell happens to be one of the chosen empty
+ * holes) -- see the leftover-assignment pass at the end of this function for
+ * how that's still given a real color instead of being silently left empty.
+ *
  * @param {{cellCount: number, neighborPairs: {a:number, b:number}[]}} geometry
  * @param {number[]} emptyHoles - indexes of holes that start empty
  * @param {number} colorCount
@@ -137,6 +142,27 @@ export function assignHoleColors(geometry, emptyHoles, colorCount, rng) {
         queue.push(neighbor);
       }
     }
+  }
+
+  // An occupied cell with zero occupied neighbors (every geometry-adjacent
+  // cell happens to be one of the chosen empty holes) has no path to any
+  // seed, so the BFS above never visits it -- left alone, it would stay at
+  // -1, indistinguishable from an intentionally-empty hole and silently
+  // dropping a peg that was supposed to exist. Assign any such leftovers to
+  // whichever color currently has the fewest pegs, so every occupied cell
+  // always ends up with a real color.
+  const colorCounts = new Array(colorCount).fill(0);
+  holeColors.forEach((color) => {
+    if (color !== -1) colorCounts[color]++;
+  });
+  for (const index of occupied) {
+    if (holeColors[index] !== -1) continue;
+    let smallest = 0;
+    for (let color = 1; color < colorCount; color++) {
+      if (colorCounts[color] < colorCounts[smallest]) smallest = color;
+    }
+    holeColors[index] = smallest;
+    colorCounts[smallest]++;
   }
 
   return holeColors;

@@ -7,8 +7,10 @@
 // Confirms: every board shape has puzzle-pool coverage, the English cross's
 // precomputed solution really plays out, a random sample of the generated
 // puzzle pool re-verifies correctly, every daily puzzle's par is
-// structurally sane, and -- the big one -- that the daily puzzle sequence
-// never repeats a pool entry until the entire pool has been used once.
+// structurally sane, every pool entry satisfies the per-color "no boring
+// color" quality rules, and -- the big one -- that the daily puzzle
+// sequence never repeats a pool entry until the entire pool has been used
+// once.
 //
 // This is NOT part of the app bundle -- it's a standalone developer tool,
 // which is why it lives in /scripts instead of /src.
@@ -137,13 +139,64 @@ if (!dailyPuzzlesPassed) allPassed = false;
 console.log(`  board mix: ${JSON.stringify(boardMixCounts)}`);
 console.log(`  -> ${dailyPuzzlesPassed ? 'PASSED' : 'FAILED'}\n`);
 
-// --- Check 5: no two days in that same cycle show the same puzzle -----------
+// --- Check 5: every pool entry satisfies the "no boring color" rules --------
+// The actual proof that the generator's per-color quality rules (see
+// scripts/generate-puzzle-pool.js) held for the whole pool, not just the
+// candidates spot-checked in Check 2 -- pure arithmetic over the already-
+// stored holeColors/par, so it's effectively instant even at full pool
+// scale. English cross's one hardcoded entry is included too (it happens to
+// already satisfy these rules; it's exempt from the *generator's* retry
+// loop, not from this check).
+console.log('Check 5: every pool entry satisfies the "no boring color" rules');
+const MIN_STARTING_PEGS_PER_COLOR = 3;
+function requiredRemovalForColor(startingCount) {
+  return startingCount === 3 ? 1 : 2;
+}
+const qualityBoardStats = {};
+let qualityFailures = 0;
+for (const entry of PUZZLE_POOL) {
+  const colorCount = entry.par.length;
+  const startingCounts = new Array(colorCount).fill(0);
+  entry.holeColors.forEach((color) => {
+    if (color !== -1) startingCounts[color]++;
+  });
+
+  const stats = (qualityBoardStats[entry.boardId] ??= { total: 0, pass: 0 });
+  stats.total++;
+
+  let ok = true;
+  let anyColorAtOne = false;
+  for (let color = 0; color < colorCount; color++) {
+    const startingCount = startingCounts[color];
+    if (startingCount === 0) continue;
+    if (startingCount < MIN_STARTING_PEGS_PER_COLOR) ok = false;
+    if (entry.par[color] === 1) anyColorAtOne = true;
+    const removed = startingCount - entry.par[color];
+    if (removed < requiredRemovalForColor(startingCount)) ok = false;
+  }
+  if (!anyColorAtOne) ok = false;
+
+  if (ok) {
+    stats.pass++;
+  } else {
+    qualityFailures++;
+    console.log(`  FAILED: pool entry (${entry.boardId}) violates a quality rule -- starting [${startingCounts}], par [${entry.par}]`);
+  }
+}
+for (const [boardId, stats] of Object.entries(qualityBoardStats)) {
+  console.log(`  ${boardId}: ${stats.pass}/${stats.total} pass (${((100 * stats.pass) / stats.total).toFixed(1)}%)`);
+}
+const qualityOk = qualityFailures === 0;
+if (!qualityOk) allPassed = false;
+console.log(`  -> ${qualityOk ? 'PASSED' : 'FAILED'}: ${qualityFailures} entries violate the quality rules\n`);
+
+// --- Check 6: no two days in that same cycle show the same puzzle -----------
 // This is the actual proof behind the "never repeats" claim: every one of
 // the pool's entries should be used EXACTLY once across a full cycle. Keyed
 // on holeColors (not just which holes start empty) since two configs with
 // the same empty holes but a different color split are meaningfully
 // different puzzles.
-console.log('Check 5: no puzzle repeats within one full cycle of the pool');
+console.log('Check 6: no puzzle repeats within one full cycle of the pool');
 const seenPuzzleKeys = new Set();
 let duplicateFound = false;
 for (let puzzleNumber = 0; puzzleNumber < PUZZLE_POOL.length; puzzleNumber++) {
