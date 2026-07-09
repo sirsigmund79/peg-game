@@ -1,0 +1,22 @@
+/* ============================================================================
+   style.css
+   ----------------------------------------------------------------------------
+   Global, app-wide styles. The actual theme colors (backgrounds, pegs,
+   accent colors, fonts) are CSS variables applied at runtime by
+   composables/useTheme.js -- this file just sets up sane page defaults and
+   a fallback font stack in case the variables haven't been applied yet.
+   ============================================================================ */
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-ui, system-ui, 'Segoe UI', Roboto, sans-serif);
+  color-scheme: light;
+}
+
+button {
+  font-family: inherit;
+}

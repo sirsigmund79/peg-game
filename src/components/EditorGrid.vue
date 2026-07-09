@@ -1,0 +1,104 @@
+<!--
+  ============================================================================
+  components/EditorGrid.vue
+  ----------------------------------------------------------------------------
+  The clickable design grid for the level editor. Every cell starts out
+  'none' (not part of the board -- shown as a faint dashed square). Clicking
+  cycles it: none -> peg -> empty -> none. This is plain display + click
+  handling -- composables/useEditor.js owns the actual cell data and the
+  cycling rule.
+  ============================================================================
+-->
+<script setup>
+import { computed } from 'vue';
+
+const props = defineProps({
+  editor: { type: Object, required: true },
+});
+
+// Vue can't nest two v-for loops on one element, so we flatten "every
+// (row, col) pair" into a single list here and loop over that instead.
+const cellCoordinates = computed(() => {
+  const coordinates = [];
+  for (let row = 0; row < props.editor.state.rows; row++) {
+    for (let col = 0; col < props.editor.state.cols; col++) {
+      coordinates.push({ row, col });
+    }
+  }
+  return coordinates;
+});
+
+function cellState(row, col) {
+  return props.editor.state.cellStates[row * props.editor.state.cols + col];
+}
+</script>
+
+<template>
+  <div
+    class="editor-grid"
+    :style="{ gridTemplateColumns: `repeat(${editor.state.cols}, 1fr)` }"
+    :class="{ busy: editor.state.isBusy }"
+  >
+    <button
+      v-for="{ row, col } in cellCoordinates"
+      :key="`${row}-${col}`"
+      type="button"
+      class="cell"
+      :class="cellState(row, col)"
+      :disabled="editor.state.isBusy"
+      :aria-label="`Grid cell row ${row + 1}, column ${col + 1}: ${cellState(row, col)}`"
+      @click="editor.cycleCell(row, col)"
+    >
+      <span v-if="cellState(row, col) === 'peg'" class="peg" aria-hidden="true"></span>
+    </button>
+  </div>
+</template>
+
+<style scoped>
+.editor-grid {
+  display: grid;
+  gap: 4px;
+  max-width: 440px;
+  margin: 0 auto;
+  padding: 12px;
+  background: var(--color-board-plate);
+  border: 2px solid var(--color-board-border);
+  border-radius: 12px;
+}
+
+.editor-grid.busy {
+  opacity: 0.7;
+}
+
+.cell {
+  aspect-ratio: 1 / 1;
+  border-radius: 4px;
+  border: 1px dashed var(--color-ink-dim);
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cell.empty {
+  background: var(--color-hole);
+  border-style: solid;
+  border-color: var(--color-board-border);
+}
+
+.cell.peg {
+  background: var(--color-hole);
+  border-style: solid;
+  border-color: var(--color-board-border);
+}
+
+.peg {
+  width: 70%;
+  height: 70%;
+  border-radius: 50%;
+  background: var(--color-peg);
+  border: 1px solid var(--color-board-border);
+}
+</style>
