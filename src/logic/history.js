@@ -15,14 +15,14 @@ import { safeGet, safeSet } from './storage.js';
 
 const HISTORY_STORAGE_KEY = 'dot-hop:history';
 
-/** @returns {Object<number, {pegsRemaining: number, won: boolean}>} every recorded result, keyed by puzzle number. */
+/** @returns {Object<number, {pegsRemaining: number[], overPar: number, won: boolean}>} every recorded result, keyed by puzzle number. */
 export function getHistory() {
   return safeGet(HISTORY_STORAGE_KEY, {});
 }
 
 /**
  * @param {number} puzzleNumber
- * @returns {{pegsRemaining: number, won: boolean} | undefined} that puzzle's recorded result, if it's been played to completion.
+ * @returns {{pegsRemaining: number[], overPar: number, won: boolean} | undefined} that puzzle's recorded result, if it's been played to completion.
  */
 export function getResultForPuzzle(puzzleNumber) {
   return getHistory()[puzzleNumber];
@@ -32,7 +32,7 @@ export function getResultForPuzzle(puzzleNumber) {
  * Records (or overwrites, if replayed) a finished round's result.
  *
  * @param {number} puzzleNumber
- * @param {{pegsRemaining: number, won: boolean}} result
+ * @param {{pegsRemaining: number[], overPar: number, won: boolean}} result
  */
 export function recordResult(puzzleNumber, result) {
   const history = getHistory();

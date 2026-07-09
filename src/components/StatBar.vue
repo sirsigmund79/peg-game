@@ -2,28 +2,35 @@
   ============================================================================
   components/StatBar.vue
   ----------------------------------------------------------------------------
-  A single compact row of stats above the board: how many pegs are left,
-  how many moves have been made, and the target (par) the player is trying
-  to reach. Pure display -- all the numbers come in as props from whatever
-  useGame() instance is currently active.
+  A single compact row of stats above the board: how many pegs of each
+  color are left, how many moves have been made, and the target (par) the
+  player is trying to reach, per color. Pure display -- all the numbers
+  come in as props from whatever useGame() instance is currently active.
 
   Deliberately plain text, no boxed "chip" cards -- each stat is just a
-  bold high-contrast number over a small muted uppercase-tracking label,
-  so there's no background chrome competing with the board for attention.
+  bold high-contrast number (or row of colored-dot-plus-count pairs) over a
+  small muted uppercase-tracking label, so there's no background chrome
+  competing with the board for attention.
   ============================================================================
 -->
 <script setup>
+import { getPegColor } from '../logic/pegColors.js';
+
 defineProps({
-  pegsRemaining: { type: Number, required: true },
+  pegsRemaining: { type: Array, required: true },
   moveCount: { type: Number, required: true },
-  par: { type: Number, required: true },
+  par: { type: Array, required: true },
 });
 </script>
 
 <template>
   <div class="stat-row">
     <div class="stat">
-      <span class="stat-value">{{ pegsRemaining }}</span>
+      <span class="stat-value multi">
+        <span v-for="(count, colorIndex) in pegsRemaining" :key="colorIndex" class="color-count">
+          <span class="dot" :style="{ background: getPegColor(colorIndex).hex }" aria-hidden="true"></span>{{ count }}
+        </span>
+      </span>
       <span class="stat-label">Left</span>
     </div>
     <div class="stat">
@@ -31,7 +38,11 @@ defineProps({
       <span class="stat-label">Moves</span>
     </div>
     <div class="stat">
-      <span class="stat-value">{{ par }}</span>
+      <span class="stat-value multi">
+        <span v-for="(count, colorIndex) in par" :key="colorIndex" class="color-count">
+          <span class="dot" :style="{ background: getPegColor(colorIndex).hex }" aria-hidden="true"></span>{{ count }}
+        </span>
+      </span>
       <span class="stat-label">Goal</span>
     </div>
   </div>
@@ -59,6 +70,25 @@ defineProps({
   /* The site's blue -- same as the header bar and the pegs -- so the stat
      counters read as branded, not just "some dark number". */
   color: var(--color-header-bg);
+}
+
+.stat-value.multi {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.color-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.dot {
+  width: 0.6em;
+  height: 0.6em;
+  border-radius: 50%;
+  flex: 0 0 auto;
 }
 
 .stat-label {

@@ -23,14 +23,17 @@
   reports taps back by calling game.selectHole(). All the "is this jump
   legal" thinking happens in composables/useGame.js and logic/rules.js.
 
-  Colors below are all CSS variables (e.g. var(--color-hole)) set by
+  Board/hole colors below are CSS variables (e.g. var(--color-hole)) set by
   composables/useTheme.js, so re-skinning the game never means editing this
-  file.
+  file. A PEG's color is different: it carries game meaning (which pegs it
+  can jump over), so it's NOT theme-driven -- it comes from the fixed
+  palette in logic/pegColors.js instead, applied as an inline style.
   ============================================================================
 -->
 <script setup>
 import { computed, reactive, ref, watch, onBeforeUnmount } from 'vue';
 import { computeDisplayPositions, computeHoleDiameterPercent } from '../logic/boardLayout.js';
+import { getPegColor } from '../logic/pegColors.js';
 
 const props = defineProps({
   // A useGame() instance -- see composables/useGame.js. Passed as a whole
@@ -58,7 +61,23 @@ function isValidTarget(index) {
 /** Builds a human-readable label for screen readers, per hole. */
 function holeAriaLabel(index) {
   const filled = props.game.holeHasPeg(index);
-  return filled ? `Peg at hole ${index}` : `Empty hole ${index}`;
+  if (!filled) return `Empty hole ${index}`;
+  return `${getPegColor(props.game.getHoleColor(index)).name} peg at hole ${index}`;
+}
+
+/**
+ * The hex color to fill hole `index`'s peg with (from the fixed palette in
+ * logic/pegColors.js). During a jump animation, the `over` hole's peg has
+ * already been removed from live state (it's just dissolving on screen),
+ * so its color falls back to the one captured for the whole animation --
+ * see animatingColorHex above.
+ */
+function pegColorAt(index) {
+  const move = animatingMove.value;
+  if (move && index === move.over) {
+    return animatingColorHex.value;
+  }
+  return getPegColor(props.game.getHoleColor(index)).hex;
 }
 
 // --- jump animation: a peg travels over the jumped peg, which dissolves --
@@ -72,6 +91,13 @@ const ARC_HEIGHT_PERCENT = 7; // how high (in board %) the peg lifts mid-flight
 // `over` hole's peg is kept rendered so it can visibly dissolve, even
 // though the game's mask already reports it gone.
 const animatingMove = ref(null);
+// Captured ONCE when the animation starts (see animateJump() below), since
+// by the time this fires the game's state has already updated -- the
+// `over`/`from` holes are already empty, so their color can no longer be
+// read live. A legal jump always requires `from` and `over` to be the SAME
+// color, and the landed peg at `to` keeps that color, so reading it there
+// (post-jump) is correct for both the traveling peg and the dissolving one.
+const animatingColorHex = ref(null);
 const travel = reactive({ leftPercent: 0, topPercent: 0, scale: 1 });
 
 const prefersReducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
@@ -89,6 +115,7 @@ function animateJump(move) {
 
   if (rafId !== null) cancelAnimationFrame(rafId);
   animatingMove.value = move;
+  animatingColorHex.value = pegColorAt(move.to);
 
   const startTime = performance.now();
   function step(now) {
@@ -159,7 +186,13 @@ function isDissolving(index) {
       :aria-pressed="isSelected(index)"
       @click="game.selectHole(index)"
     >
-      <span v-if="shouldShowPeg(index)" class="peg" :class="{ dissolving: isDissolving(index) }" aria-hidden="true"></span>
+      <span
+        v-if="shouldShowPeg(index)"
+        class="peg"
+        :class="{ dissolving: isDissolving(index) }"
+        :style="{ backgroundColor: pegColorAt(index) }"
+        aria-hidden="true"
+      ></span>
     </button>
 
     <!-- The peg physically mid-jump -- positioned independently of any
@@ -170,7 +203,7 @@ function isDissolving(index) {
       aria-hidden="true"
       :style="{ left: travel.leftPercent + '%', top: travel.topPercent + '%' }"
     >
-      <span class="peg" :style="{ transform: `scale(${travel.scale})` }"></span>
+      <span class="peg" :style="{ transform: `scale(${travel.scale})`, backgroundColor: animatingColorHex }"></span>
     </div>
   </div>
 </template>
@@ -272,7 +305,9 @@ function isDissolving(index) {
   width: 72%;
   height: 72%;
   border-radius: 50%;
-  background-color: var(--color-peg);
+  /* background-color is set inline per-peg from logic/pegColors.js -- see
+     pegColorAt() above -- since a peg's color carries game meaning and
+     isn't theme-driven. */
   /* Flat, confident vector fill separated from the tray by a crisp
      drop-shadow -- no gradients, no glossy sphere highlight. */
   filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.15));

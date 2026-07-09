@@ -2,41 +2,23 @@
 // solver.js
 // ----------------------------------------------------------------------------
 // This file answers one question, as fast as possible: "starting from this
-// exact board position, what's the FEWEST pegs I could ever end up with if I
-// played perfectly?" That number is called `par`. It also tells us the best
-// next move to take to stay on track for that par -- that's the `hint`.
+// exact board position, what's the FEWEST pegs I could ever end up with --
+// broken down PER COLOR -- if I played perfectly?" Those per-color counts
+// are called `par`. It also tells us the best next move to take to stay on
+// track for that par -- that's the `hint`.
 //
 // No Vue code lives here. This is plain math/search so it's easy to test on
-// its own (see the bottom of daily.js or scripts/check-solver.js for a
-// real-world check against the answers we already know are correct).
+// its own (see scripts/check-solver.js for a real-world check against
+// answers we already know are correct).
 //
 // HOW A BOARD POSITION IS STORED
-// A board position is a "mask": one big number where bit `i` is 1 if hole
-// `i` currently has a peg in it, and 0 if it's empty. We use BigInt (not a
-// normal number) so this works correctly even for the 33-hole English cross
-// board, which has more bits than a normal 32-bit integer can safely hold
-// with bitwise operators.
+// A board position is a `masks` array: one bigint per peg color, bit `i` of
+// masks[c] is 1 if hole `i` currently has a peg of color `c`. A peg can only
+// ever jump over a peg of the SAME color -- see rules.js -- so which color
+// occupies a hole matters for legality, not just whether it's occupied.
+// This file is deliberately self-contained (no import from rules.js, same
+// as before) and duplicates the small amount of bit-twiddling it needs.
 // ============================================================================
-
-/**
- * Counts how many 1-bits (pegs) are set in a mask.
- *
- * @param {bigint} mask
- * @returns {number} how many pegs are on the board
- */
-export function countPegs(mask) {
-  let remaining = mask;
-  let total = 0;
-  while (remaining > 0n) {
-    // The lowest bit tells us if there's a peg in the "next" hole we're
-    // checking; then we shift it off and check the next one.
-    if (remaining & 1n) {
-      total += 1;
-    }
-    remaining >>= 1n;
-  }
-  return total;
-}
 
 /**
  * Thrown when a solve exceeds an explicit `nodeBudget` (see createSolver
@@ -45,40 +27,73 @@ export function countPegs(mask) {
  */
 export class SolverBudgetExceededError extends Error {}
 
+function countBits(mask) {
+  let remaining = mask;
+  let total = 0;
+  while (remaining > 0n) {
+    if (remaining & 1n) total += 1;
+    remaining >>= 1n;
+  }
+  return total;
+}
+
+function colorAt(masks, index) {
+  const bit = 1n << BigInt(index);
+  for (let color = 0; color < masks.length; color++) {
+    if (masks[color] & bit) return color;
+  }
+  return -1;
+}
+
 /**
  * Builds a solver for one specific board shape. You pass in the board's
- * list of legal jump triples (from geometry.js), and you get back a
- * `findBest` function you can call over and over with different starting
+ * list of legal jump triples (from geometry.js) and its hole count (needed
+ * to pack a multi-color position into a single memo key), and you get back
+ * a `findBest` function you can call over and over with different starting
  * positions -- answers are memoized (remembered) so repeated calls for the
  * same or overlapping positions are fast.
  *
  * @param {{from:number, over:number, to:number}[]} moveList - every jump
  *   this board shape allows, from geometry.js
+ * @param {number} cellCount - how many holes this board has
  * @param {{nodeBudget?: number}} [options] - optional safety valve, used
  *   only by the offline pool-generator script (scripts/generate-puzzle-pool.js)
  *   to skip a handful of pathologically slow candidates on big, densely
  *   connected boards instead of running (near) forever. Leave unset for
  *   normal gameplay -- there is no limit by default.
- * @returns {{ findBest: (mask: bigint) => {minPegs: number, move: object|null} }}
+ * @returns {{ findBest: (masks: bigint[]) => {minPegs: number, perColor: number[], move: object|null} }}
  */
-export function createSolver(moveList, options = {}) {
+export function createSolver(moveList, cellCount, options = {}) {
   const nodeBudget = options.nodeBudget ?? Infinity;
   let nodesVisited = 0;
+  const cellCountBig = BigInt(cellCount);
 
   // The memo remembers "for this exact board position, here's the best
-  // outcome we already worked out". BigInt keys work fine in a Map.
+  // outcome we already worked out". Every color's mask gets packed into
+  // ONE combined bigint key (color c's bits shifted up by c*cellCount
+  // places) so the existing single-Map memoization pattern barely changes.
   const memo = new Map();
 
+  function encodeKey(masks) {
+    let key = 0n;
+    for (let color = 0; color < masks.length; color++) {
+      key |= masks[color] << (BigInt(color) * cellCountBig);
+    }
+    return key;
+  }
+
   /**
-   * Recursively searches every possible sequence of jumps from `mask`
-   * onward, and returns the best (lowest peg-count) result reachable, plus
-   * the first move to make to head down that path.
+   * Recursively searches every possible sequence of jumps from `masks`
+   * onward, and returns the best (lowest total peg-count) result
+   * reachable, its per-color breakdown, plus the first move to make to
+   * head down that path.
    *
-   * @param {bigint} mask - current board position
-   * @returns {{minPegs: number, move: {from:number, over:number, to:number}|null}}
+   * @param {bigint[]} masks - current board position, one mask per color
+   * @returns {{minPegs: number, perColor: number[], move: {from:number, over:number, to:number}|null}}
    */
-  function findBest(mask) {
-    const cached = memo.get(mask);
+  function findBest(masks) {
+    const key = encodeKey(masks);
+    const cached = memo.get(key);
     if (cached !== undefined) {
       return cached;
     }
@@ -88,45 +103,53 @@ export function createSolver(moveList, options = {}) {
       throw new SolverBudgetExceededError(`Exceeded node budget of ${nodeBudget}`);
     }
 
+    const colorCount = masks.length;
+
     // If we make no more jumps at all, this is how many pegs we'd be left
-    // with -- our starting point for "best so far".
-    let bestPegs = countPegs(mask);
+    // with (per color) -- our starting point for "best so far".
+    let bestPerColor = masks.map(countBits);
+    let bestPegs = bestPerColor.reduce((sum, count) => sum + count, 0);
     let bestMove = null;
 
     for (const move of moveList) {
+      const fromColor = colorAt(masks, move.from);
+      if (fromColor === -1) continue;
+      if (colorAt(masks, move.over) !== fromColor) continue;
+
       const fromBit = 1n << BigInt(move.from);
       const overBit = 1n << BigInt(move.over);
       const toBit = 1n << BigInt(move.to);
 
-      const fromHasPeg = (mask & fromBit) !== 0n;
-      const overHasPeg = (mask & overBit) !== 0n;
-      const toIsEmpty = (mask & toBit) === 0n;
+      const occupied = masks.reduce((acc, mask) => acc | mask, 0n);
+      if (occupied & toBit) continue; // landing hole must be empty
 
-      // A jump is only legal if the peg exists, the peg it's jumping is
-      // there too, and the landing hole is empty.
-      if (fromHasPeg && overHasPeg && toIsEmpty) {
-        // Making the jump removes the "from" and "over" pegs, and adds a
-        // peg at "to".
-        const nextMask = (mask & ~fromBit & ~overBit) | toBit;
-        const result = findBest(nextMask);
+      // Making the jump removes the "from" and "over" pegs (both the same
+      // color as the jumping peg) and adds a peg at "to", of that color.
+      const nextMasks = [...masks];
+      nextMasks[fromColor] = (masks[fromColor] & ~fromBit & ~overBit) | toBit;
 
-        if (result.minPegs < bestPegs) {
-          bestPegs = result.minPegs;
-          bestMove = move;
-        }
+      const result = findBest(nextMasks);
 
-        // NOTE: a board can never end with zero pegs (the last jump always
-        // leaves the landing peg behind), so 1 is the best any board can
-        // ever do. Once we find a path that reaches 1, there's no point
-        // checking the rest of the moves -- stop early to keep this fast.
-        if (bestPegs === 1) {
-          break;
-        }
+      if (result.minPegs < bestPegs) {
+        bestPegs = result.minPegs;
+        bestPerColor = result.perColor;
+        bestMove = move;
+      }
+
+      // NOTE: a jump only ever removes a peg of its own color, and the
+      // last peg of a color can never be jumped away (there's nothing left
+      // to jump it over) -- so no color can ever be reduced below 1 once
+      // it starts with at least 1 peg. That makes `colorCount` the true
+      // floor for the total across every color that started non-empty.
+      // Once we find a path that reaches it, there's no point checking the
+      // rest of the moves -- stop early to keep this fast.
+      if (bestPegs === colorCount) {
+        break;
       }
     }
 
-    const answer = { minPegs: bestPegs, move: bestMove };
-    memo.set(mask, answer);
+    const answer = { minPegs: bestPegs, perColor: bestPerColor, move: bestMove };
+    memo.set(key, answer);
     return answer;
   }
 

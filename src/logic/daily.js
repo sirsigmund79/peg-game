@@ -27,6 +27,7 @@ import { BOARD_CATALOG } from './boards.js';
 import { PUZZLE_POOL } from './puzzlePool.js';
 import { SCHEDULED_PUZZLES } from './scheduledPuzzles.js';
 import { buildDailyPuzzleFromDesign } from './customBoard.js';
+import { getEmptyHolesFromColors } from './rules.js';
 
 // NOTE: this is "day zero" of the puzzle numbering scheme. Never change
 // this once the game has real players -- it would shuffle everyone's
@@ -141,11 +142,13 @@ const puzzleCache = new Map();
 
 /**
  * Works out the full puzzle definition for a given puzzle number: which
- * board shape, which holes start empty, and the solver-confirmed par.
+ * board shape, which holes start empty (and what color each starting peg
+ * is), and the solver-confirmed par (one target count per color).
  *
  * @param {number} puzzleNumber
  * @returns {{puzzleNumber:number, date:string, boardId:string, boardName:string,
- *   geometry:object, emptyHoles:number[], label:string, par:number, cellCount:number}}
+ *   geometry:object, holeColors:number[], colorCount:number, emptyHoles:number[],
+ *   label:string, par:number[], cellCount:number}}
  */
 export function getPuzzleForNumber(puzzleNumber) {
   const cached = puzzleCache.get(puzzleNumber);
@@ -166,16 +169,19 @@ export function getPuzzleForNumber(puzzleNumber) {
   const poolIndex = getPoolIndexForPuzzleNumber(puzzleNumber);
   const entry = PUZZLE_POOL[poolIndex];
   const board = BOARD_CATALOG[entry.boardId];
+  const emptyHoles = getEmptyHolesFromColors(entry.holeColors);
 
-  const holeWord = entry.emptyHoles.length === 1 ? 'hole' : 'holes';
+  const holeWord = emptyHoles.length === 1 ? 'hole' : 'holes';
   const puzzle = {
     puzzleNumber,
     date,
     boardId: board.id,
     boardName: board.name,
     geometry: board.geometry,
-    emptyHoles: entry.emptyHoles,
-    label: `${entry.emptyHoles.length} empty ${holeWord}`,
+    holeColors: entry.holeColors,
+    colorCount: entry.par.length,
+    emptyHoles,
+    label: `${emptyHoles.length} empty ${holeWord}`,
     par: entry.par,
     cellCount: board.geometry.cellCount,
   };

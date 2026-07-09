@@ -12,12 +12,14 @@
 <script setup>
 import { ref } from 'vue';
 import { useEditor } from '../composables/useEditor.js';
+import { getPegColor } from '../logic/pegColors.js';
 import EditorGrid from './EditorGrid.vue';
 import Board from './Board.vue';
 
 const emit = defineEmits(['play-puzzle']);
 
 const editor = useEditor();
+const COLOR_COUNT_OPTIONS = [2, 3, 4];
 
 const rowsInput = ref(String(editor.state.rows));
 const colsInput = ref(String(editor.state.cols));
@@ -57,6 +59,21 @@ function playSavedPuzzle(savedPuzzle) {
       <EditorGrid :editor="editor" />
 
       <div class="toolbar-row">
+        <span class="resize-field color-count-label">Colors</span>
+        <button
+          v-for="count in COLOR_COUNT_OPTIONS"
+          :key="count"
+          type="button"
+          class="toolbar-button"
+          :class="{ primary: editor.state.colorCount === count }"
+          :disabled="editor.state.isBusy"
+          @click="editor.setColorCount(count)"
+        >
+          {{ count }}
+        </button>
+      </div>
+
+      <div class="toolbar-row">
         <label class="resize-field">
           Rows
           <input v-model="rowsInput" type="number" min="1" max="20" @change="applyResize" />
@@ -74,7 +91,16 @@ function playSavedPuzzle(savedPuzzle) {
       </div>
 
       <p v-if="editor.state.calculatedPar !== null" class="par-readout">
-        Best possible: <strong>{{ editor.state.calculatedPar }}</strong> peg{{ editor.state.calculatedPar === 1 ? '' : 's' }} left
+        Best possible:
+        <strong
+          v-for="(count, colorIndex) in editor.state.calculatedPar"
+          :key="colorIndex"
+          class="par-chip"
+          :style="{ color: getPegColor(colorIndex).hex }"
+        >
+          {{ getPegColor(colorIndex).emoji }}{{ count }}
+        </strong>
+        left
       </p>
 
       <div class="save-row">
@@ -89,7 +115,13 @@ function playSavedPuzzle(savedPuzzle) {
         <li v-for="saved in editor.state.savedPuzzles" :key="saved.id" class="puzzle-item">
           <div class="puzzle-info">
             <strong>{{ saved.name }}</strong>
-            <span class="puzzle-meta">par {{ saved.par }} &middot; {{ saved.rows }}x{{ saved.cols }}</span>
+            <span class="puzzle-meta">
+              par
+              <span v-for="(count, colorIndex) in saved.par" :key="colorIndex" :style="{ color: getPegColor(colorIndex).hex }">
+                {{ getPegColor(colorIndex).emoji }}{{ count }}
+              </span>
+              &middot; {{ saved.rows }}x{{ saved.cols }}
+            </span>
           </div>
           <div class="puzzle-actions">
             <button type="button" class="text-button" @click="playSavedPuzzle(saved)">Play</button>
@@ -184,6 +216,15 @@ function playSavedPuzzle(savedPuzzle) {
   font-family: var(--font-ui);
   color: var(--color-ink);
   margin: 8px 0;
+}
+
+.par-chip {
+  margin: 0 2px;
+}
+
+.color-count-label {
+  font-weight: 700;
+  color: var(--color-ink);
 }
 
 .save-row {
