@@ -90,7 +90,7 @@ function goToArchive() {
         @click="playDay(entry.puzzleNumber)"
       >
         <span class="day-label">{{ entry.isToday ? 'Today' : entry.weekday }}</span>
-        <PuzzleGlyph :geometry="entry.geometry" :empty-holes="entry.emptyHoles" :hole-colors="entry.holeColors" :size="52" class="day-glyph" />
+        <PuzzleGlyph :geometry="entry.geometry" :empty-holes="entry.emptyHoles" :hole-colors="entry.holeColors" :size="68" class="day-glyph" />
         <span v-if="entry.result" class="day-result"><span aria-hidden="true">{{ entry.result.emoji }}</span> {{ entry.result.rank }}</span>
         <span v-else class="day-play">Play</span>
       </button>

@@ -6,10 +6,14 @@
   using the same layout math as Board.vue's holePositions (empty holes get
   no dot at all). Used by ArchiveView.vue so a puzzle's shape can be
   recognized (or guessed at) at a glance without spoiling it with a text
-  label. Also used by ArchiveDayStrip.vue, larger and in the puzzle's real
-  peg colors (via the optional `size`/`holeColors` props below) -- ArchiveView
-  itself keeps passing neither, so its dots stay the original flat, small
-  silhouette.
+  label -- there, every dot gets a randomized size/opacity (seeded per hole,
+  so it's stable across re-renders) for a loose, hand-drawn look.
+
+  ArchiveDayStrip.vue instead passes real per-hole colors via `holeColors`,
+  which switches this into a completely different, bolder rendering: every
+  dot the SAME fixed (larger) radius at full opacity, with a thin dark
+  outline -- legible at a glance rather than sketchy, since it's meant to
+  look enticing, not just recognizable.
   ============================================================================
 -->
 <script setup>
@@ -32,11 +36,17 @@ function seededRandom(seed) {
   return x - Math.floor(x);
 }
 
-/** One dot per peg (i.e. one per hole that isn't in emptyHoles) -- together they read as the puzzle's shape, Seurat-style, without a dot standing in for more than one peg. */
+// Real colors (ArchiveDayStrip.vue) switch to the bold rendering: every dot
+// the same fixed radius, full opacity, outlined -- see the file header.
+const isBold = computed(() => props.holeColors.length > 0);
+const BOLD_RADIUS = 6.2;
+
+/** One dot per peg (i.e. one per hole that isn't in emptyHoles) -- together they read as the puzzle's shape, Seurat-style (or, in bold mode, as a set of uniform pegs), without a dot standing in for more than one peg. */
 const dots = computed(() => {
   const geometry = props.geometry;
   const cells = geometry.cells;
   const emptySet = new Set(props.emptyHoles);
+  const bold = isBold.value;
 
   // Same de-skew as Board.vue: triangular-lattice boards store (x, y) as
   // (col, row), which draws skewed unless each row is shifted back.
@@ -61,13 +71,13 @@ const dots = computed(() => {
   displayCells.forEach((cell, index) => {
     if (emptySet.has(index)) return;
 
-    const size = 2.6 + seededRandom(index * 211 + 3) * 1.4;
-    const opacity = 0.55 + seededRandom(index * 271 + 4) * 0.45;
+    const r = bold ? BOLD_RADIUS : 2.6 + seededRandom(index * 211 + 3) * 1.4;
+    const opacity = bold ? 1 : 0.55 + seededRandom(index * 271 + 4) * 0.45;
 
     result.push({
       x: padding + ((cell.x - minX) / widthSpan) * usable,
       y: padding + ((cell.y - minY) / heightSpan) * usable,
-      r: size,
+      r,
       opacity,
       color: props.holeColors[index] >= 0 ? getPegColor(props.holeColors[index]).hex : null,
     });
@@ -87,6 +97,8 @@ const dots = computed(() => {
       :r="dot.r"
       :fill-opacity="dot.color ? 1 : dot.opacity"
       :fill="dot.color ?? 'currentColor'"
+      :stroke="dot.color ? 'rgba(0, 0, 0, 0.3)' : 'none'"
+      :stroke-width="dot.color ? 1.4 : 0"
     />
   </svg>
 </template>
