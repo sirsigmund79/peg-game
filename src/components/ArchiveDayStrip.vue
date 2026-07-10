@@ -5,12 +5,14 @@
   The "more obvious archive callout" shown on the result screen, once
   ResultOverlay.vue's own reveal animation has finished (see PlayView.vue's
   `showArchiveStrip`, set from ResultOverlay's `@revealed`). A horizontal
-  strip of the last 5 archive days -- always anchored on TODAY's puzzle
+  strip of the last few archive days -- always anchored on TODAY's puzzle
   number, not whichever puzzle was just played, so this reads as "the
   archive's most recent days" rather than shifting around when replaying an
-  old day -- each shown as a small tile with its own peg-dot glyph (real
-  colors, via PuzzleGlyph.vue's `holeColors` prop) instead of a generic icon,
-  plus a final "Explore the Archive" tile.
+  old day -- each shown as a tile with its own peg-dot glyph (real colors,
+  via PuzzleGlyph.vue's `holeColors` prop) instead of a generic icon, plus a
+  final "Explore the Archive" tile. Kept to a small day count (see
+  RECENT_DAY_COUNT below) so each tile stays roomy enough for its rank text
+  to wrap without spilling past its own border.
 
   On a touch device this scrolls/swipes with snap, peeking the next tile,
   the same feel as the NYT Games home screen this is modeled on. On a real
@@ -30,7 +32,7 @@ import { useRouter } from '../composables/useRouter.js';
 import { EVENTS, track } from '../services/analytics.js';
 import PuzzleGlyph from './PuzzleGlyph.vue';
 
-const RECENT_DAY_COUNT = 5;
+const RECENT_DAY_COUNT = 3;
 
 const { navigate } = useRouter();
 const todayNumber = getTodayPuzzleNumber();
@@ -88,10 +90,8 @@ function goToArchive() {
         @click="playDay(entry.puzzleNumber)"
       >
         <span class="day-label">{{ entry.isToday ? 'Today' : entry.weekday }}</span>
-        <PuzzleGlyph :geometry="entry.geometry" :empty-holes="entry.emptyHoles" :hole-colors="entry.holeColors" :size="40" class="day-glyph" />
-        <span v-if="entry.result" class="day-result">
-          <span aria-hidden="true">{{ entry.result.emoji }}</span>{{ entry.result.rank }}
-        </span>
+        <PuzzleGlyph :geometry="entry.geometry" :empty-holes="entry.emptyHoles" :hole-colors="entry.holeColors" :size="52" class="day-glyph" />
+        <span v-if="entry.result" class="day-result"><span aria-hidden="true">{{ entry.result.emoji }}</span> {{ entry.result.rank }}</span>
         <span v-else class="day-play">Play</span>
       </button>
 
@@ -159,13 +159,15 @@ function goToArchive() {
 }
 
 .day-tile {
-  flex: 0 0 94px;
+  flex: 0 0 124px;
+  min-height: 148px;
   scroll-snap-align: start;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
-  padding: 12px 8px 10px;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px 10px;
   font-family: var(--font-ui);
   text-align: center;
   background: var(--color-card-bg);
@@ -175,13 +177,22 @@ function goToArchive() {
   cursor: pointer;
 }
 
+/* Every direct child of a tile is text that must be free to wrap onto a new
+   line rather than push the tile wider (or spill past its border) --
+   without this, a flex item's default min-width:auto lets its content's
+   un-wrapped width win over the tile's own width. */
+.day-tile > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
 .day-tile.today {
   background: var(--color-header-bg);
 }
 
 .day-label {
   font-weight: 800;
-  font-size: 0.72rem;
+  font-size: 0.8rem;
   color: var(--color-ink);
 }
 
@@ -200,14 +211,10 @@ function goToArchive() {
 .day-result,
 .day-play {
   font-weight: 700;
-  font-size: 0.68rem;
+  font-size: 0.72rem;
+  line-height: 1.3;
   color: var(--color-ink-secondary);
-}
-
-.day-result {
-  display: flex;
-  align-items: center;
-  gap: 3px;
+  overflow-wrap: break-word;
 }
 
 .day-tile.today .day-result,
@@ -217,18 +224,19 @@ function goToArchive() {
 
 .cta-tile {
   background: var(--color-accent);
-  justify-content: center;
 }
 
 .cta-icon {
-  font-size: 1.4rem;
+  font-size: 1.6rem;
   line-height: 1;
 }
 
 .cta-label {
   font-weight: 800;
-  font-size: 0.72rem;
+  font-size: 0.8rem;
+  line-height: 1.3;
   color: var(--color-card-bg);
+  overflow-wrap: break-word;
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -238,7 +246,6 @@ function goToArchive() {
 
   .day-tile {
     flex: 1 1 0;
-    min-width: 0;
   }
 }
 </style>
