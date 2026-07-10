@@ -1,0 +1,260 @@
+<!--
+  ============================================================================
+  components/StoryView.vue
+  ----------------------------------------------------------------------------
+  Hidden prototype for the "Board Meeting" story mode -- only reachable at
+  "#/story" (see App.vue; there is deliberately no nav link to it). Walks
+  through logic/story/boardMeetingChapters.js one chapter at a time:
+  intro card -> play the board -> outro card -> next chapter's intro, ending
+  on a plain "to be continued" card.
+
+  Playing itself is identical to the daily game (same Board/StatBar/Controls
+  components, same rules) -- only the narration cards and the per-chapter
+  palette (applied as inline CSS variables on this component's root, so it
+  never touches the global theme) are different.
+  ============================================================================
+-->
+<script setup>
+import { ref, computed, watch } from 'vue';
+import { useGame } from '../composables/useGame.js';
+import { BOARD_MEETING_CHAPTERS } from '../logic/story/boardMeetingChapters.js';
+import { getChapterPuzzle, getStoryProgress, setStoryProgress, resetStoryProgress } from '../logic/story/story.js';
+import Board from './Board.vue';
+import StatBar from './StatBar.vue';
+import Controls from './Controls.vue';
+
+const chapters = BOARD_MEETING_CHAPTERS;
+
+const startingIndex = Math.min(getStoryProgress(), chapters.length);
+const chapterIndex = ref(startingIndex);
+const phase = ref(startingIndex >= chapters.length ? 'end' : 'intro'); // 'intro' | 'playing' | 'outro' | 'end'
+
+const currentChapter = computed(() => chapters[chapterIndex.value]);
+
+const chapterStyle = computed(() => currentChapter.value?.themeOverrides ?? {});
+
+const game = ref(null);
+const flavorLine = ref(null);
+let firstMoveShown = false;
+let lastPegShown = false;
+
+function beginChapter() {
+  game.value = useGame(getChapterPuzzle(currentChapter.value));
+  flavorLine.value = null;
+  firstMoveShown = false;
+  lastPegShown = false;
+  phase.value = 'playing';
+}
+
+watch(
+  () => game.value?.state.moveCount,
+  (count) => {
+    if (count === 1 && !firstMoveShown) {
+      firstMoveShown = true;
+      flavorLine.value = currentChapter.value.flavor?.onFirstMove ?? flavorLine.value;
+    }
+  }
+);
+
+watch(
+  () => game.value?.pegsRemaining,
+  (remaining) => {
+    if (!remaining || lastPegShown) return;
+    const total = remaining.reduce((sum, count) => sum + count, 0);
+    if (total === 1) {
+      lastPegShown = true;
+      flavorLine.value = currentChapter.value.flavor?.onLastPeg ?? flavorLine.value;
+    }
+  }
+);
+
+watch(
+  () => game.value?.roundOver,
+  (roundOver) => {
+    if (roundOver) phase.value = 'outro';
+  }
+);
+
+const wonChapter = computed(() => game.value?.hasWon ?? false);
+
+function continueStory() {
+  const nextIndex = chapterIndex.value + 1;
+  setStoryProgress(nextIndex);
+  if (nextIndex >= chapters.length) {
+    phase.value = 'end';
+  } else {
+    chapterIndex.value = nextIndex;
+    phase.value = 'intro';
+  }
+}
+
+function restartStory() {
+  resetStoryProgress();
+  chapterIndex.value = 0;
+  phase.value = 'intro';
+  game.value = null;
+}
+</script>
+
+<template>
+  <div class="story-view" :style="chapterStyle">
+    <div class="story-content">
+      <template v-if="phase === 'intro'">
+        <div class="narrative-card">
+          <h2 class="chapter-title">{{ currentChapter.title }}</h2>
+          <p v-for="(line, index) in currentChapter.intro" :key="index" class="narrative-line">{{ line }}</p>
+          <button type="button" class="story-button" @click="beginChapter">Begin</button>
+        </div>
+      </template>
+
+      <template v-else-if="phase === 'playing'">
+        <p class="puzzle-line">{{ currentChapter.title }}</p>
+        <div class="game-area">
+          <StatBar :pegs-remaining="game.pegsRemaining" :move-count="game.state.moveCount" :par="game.par" />
+          <Board :game="game" />
+        </div>
+        <p v-if="flavorLine" class="flavor-line">{{ flavorLine }}</p>
+        <Controls :can-undo="game.state.undoStack.length > 0" @undo="game.undo()" @reset="game.reset()" />
+      </template>
+
+      <template v-else-if="phase === 'outro'">
+        <div class="narrative-card">
+          <h2 class="chapter-title">{{ currentChapter.title }}</h2>
+          <p
+            v-for="(line, index) in wonChapter ? currentChapter.outroWin : currentChapter.outroLeftover"
+            :key="index"
+            class="narrative-line"
+          >
+            {{ line }}
+          </p>
+          <button type="button" class="story-button" @click="continueStory">Continue</button>
+        </div>
+      </template>
+
+      <template v-else>
+        <div class="narrative-card">
+          <h2 class="chapter-title">To be continued&hellip;</h2>
+          <p class="narrative-line">That's every branch office on file for now. More shifts are coming.</p>
+          <button type="button" class="story-button outline" @click="restartStory">Restart story</button>
+        </div>
+      </template>
+    </div>
+  </div>
+</template>
+
+<style scoped>
+.story-view {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  background: var(--color-page-bg);
+}
+
+.story-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  width: 100%;
+  max-width: 460px;
+  margin: 0 auto;
+  padding: 24px 20px;
+  text-align: center;
+}
+
+.puzzle-line {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-weight: 600;
+  font-size: 0.72rem;
+  letter-spacing: 0.03em;
+  color: var(--color-ink-dim);
+}
+
+.game-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  width: 100%;
+}
+
+.flavor-line {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-style: italic;
+  font-size: 0.8rem;
+  color: var(--color-ink-secondary);
+}
+
+.narrative-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+  padding: 24px;
+  background: var(--color-card-bg);
+  border: var(--frame-border);
+  border-radius: var(--frame-radius-board);
+  box-shadow: var(--frame-shadow-card);
+}
+
+.chapter-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 1.2rem;
+  color: var(--color-ink);
+}
+
+.narrative-line {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: 0.95rem;
+  line-height: 1.4;
+  color: var(--color-ink-secondary);
+}
+
+.story-button {
+  margin-top: 6px;
+  min-height: 52px;
+  padding: 8px 20px;
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: 1rem;
+  color: var(--color-card-bg);
+  background: var(--color-peg);
+  border-width: var(--control-border-width);
+  border-style: solid;
+  border-color: var(--color-peg);
+  border-radius: 14px;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.story-button:hover {
+  background: var(--color-ink);
+  border-color: var(--color-ink);
+}
+
+.story-button.outline {
+  color: var(--color-accent);
+  background: transparent;
+  border-color: var(--color-accent);
+}
+
+.story-button.outline:hover {
+  background: var(--color-accent);
+  color: var(--color-card-bg);
+}
+
+.story-button:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+</style>
