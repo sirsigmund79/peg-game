@@ -21,11 +21,12 @@
   ============================================================================
 -->
 <script setup>
-import { ref, watch, computed, onBeforeUnmount } from 'vue';
+import { ref, watch, computed, onMounted, onBeforeUnmount } from 'vue';
 import { getTodaysPuzzle, getPuzzleForNumber } from '../logic/daily.js';
 import { useGame } from '../composables/useGame.js';
 import { useRouter } from '../composables/useRouter.js';
 import { pendingCustomPuzzle } from '../composables/usePendingPuzzle.js';
+import { EVENTS, track } from '../services/analytics.js';
 import Board from './Board.vue';
 import StatBar from './StatBar.vue';
 import Controls from './Controls.vue';
@@ -49,12 +50,45 @@ function resolvePuzzle() {
   return getTodaysPuzzle();
 }
 
+/** Analytics-only: where the puzzle useGame() is about to load came from -- mirrors resolvePuzzle()'s own branching. */
+function resolveSource() {
+  if (pendingCustomPuzzle.value) return 'custom';
+  return route.segments[1] !== undefined ? 'link' : 'daily';
+}
+
 // `puzzle` and `game` are plain refs (not computed) because loading a new
 // puzzle -- whether today's, an archive pick, or a custom design -- always
 // needs a brand-new game with an empty undo history, not a recalculation
 // of the same one.
 const puzzle = ref(resolvePuzzle());
-const game = ref(useGame(puzzle.value));
+const game = ref(useGame(puzzle.value, { source: resolveSource() }));
+
+/**
+ * Fires puzzle_left_incomplete exactly once per round, iff the player made
+ * at least one move but the round never finished -- the direct "drop-off"
+ * signal docs/ANALYTICS.md's Core Loop Funnel dashboard is built on, rather
+ * than only inferring abandonment from a funnel gap.
+ */
+function reportIncompleteIfNeeded() {
+  const currentGame = game.value;
+  if (!currentGame || currentGame.roundOver || currentGame.state.incompleteReported) return;
+  if (currentGame.state.moveCount === 0) return;
+  currentGame.state.incompleteReported = true;
+  track(EVENTS.PUZZLE_LEFT_INCOMPLETE, {
+    puzzle_number: puzzle.value.puzzleNumber ?? null,
+    move_count: currentGame.state.moveCount,
+    time_spent_ms: Date.now() - currentGame.state.roundStartedAt,
+  });
+}
+
+function handleVisibilityChange() {
+  if (document.visibilityState === 'hidden') reportIncompleteIfNeeded();
+}
+
+onMounted(() => {
+  document.addEventListener('visibilitychange', handleVisibilityChange);
+  window.addEventListener('pagehide', reportIncompleteIfNeeded);
+});
 
 /** Puzzle dates are plain "YYYY-MM-DD" local dates (see logic/daily.js) -- format for display without letting the browser reinterpret it in another timezone. */
 const formattedDate = computed(() => {
@@ -73,10 +107,11 @@ const formattedDate = computed(() => {
 watch(
   () => route.path,
   () => {
+    reportIncompleteIfNeeded();
     clearResultHold();
     showResult.value = false;
     puzzle.value = resolvePuzzle();
-    game.value = useGame(puzzle.value);
+    game.value = useGame(puzzle.value, { source: resolveSource() });
   }
 );
 
@@ -116,7 +151,12 @@ watch(
   }
 );
 
-onBeforeUnmount(clearResultHold);
+onBeforeUnmount(() => {
+  clearResultHold();
+  reportIncompleteIfNeeded();
+  document.removeEventListener('visibilitychange', handleVisibilityChange);
+  window.removeEventListener('pagehide', reportIncompleteIfNeeded);
+});
 </script>
 
 <template>

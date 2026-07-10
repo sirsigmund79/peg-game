@@ -32,7 +32,12 @@ export const SITE_URL = 'https://dot-hop.pages.dev/';
 export function buildShareText({ pegsRemaining, puzzleNumber = null, formattedDate = null }) {
   const emojiLine = pegsRemaining.map((count, colorIndex) => `${getPegColor(colorIndex).emoji}${count}`).join(' ');
   const dateLine = formattedDate ? `Dot Hop — ${formattedDate}\n` : '';
-  const link = puzzleNumber === null ? SITE_URL : `${SITE_URL}#/play/${puzzleNumber}`;
+  // The `?ref=share` marker doesn't reveal anything spoiler-y -- it's the
+  // only way to tell a session arriving from a shared result apart from any
+  // other visit, since PostHog auto-captures $current_url/$referrer but has
+  // no other way to know a link came from this button. See the Virality
+  // dashboard in docs/ANALYTICS.md.
+  const link = puzzleNumber === null ? `${SITE_URL}?ref=share` : `${SITE_URL}?ref=share#/play/${puzzleNumber}`;
   return `${dateLine}${emojiLine}\n${link}`;
 }
 

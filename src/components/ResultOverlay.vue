@@ -31,6 +31,7 @@ import { getRankForOverPar, getColorAt } from '../logic/rules.js';
 import { getPegColor } from '../logic/pegColors.js';
 import { computeDisplayPositions } from '../logic/boardLayout.js';
 import { useRouter } from '../composables/useRouter.js';
+import { EVENTS, track } from '../services/analytics.js';
 import MiniBoard from './MiniBoard.vue';
 
 const props = defineProps({
@@ -151,8 +152,15 @@ const shareText = computed(() =>
 const shareStatusMessage = ref('');
 
 async function handleShareClick() {
+  track(EVENTS.SHARE_CLICKED, {
+    puzzle_number: props.puzzle.puzzleNumber ?? null,
+    rank: achievedTier.value.rank,
+    won: props.game.hasWon,
+    over_par: props.game.overPar,
+  });
   const didCopy = await copyTextToClipboard(shareText.value);
   shareStatusMessage.value = didCopy ? 'Copied to clipboard!' : "Couldn't copy -- try again, or share a screenshot instead.";
+  track(EVENTS.SHARE_COPY_RESULT, { puzzle_number: props.puzzle.puzzleNumber ?? null, success: didCopy });
 }
 
 function goToArchive() {

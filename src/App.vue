@@ -16,6 +16,7 @@
 import { computed, watch } from 'vue';
 import { useTheme } from './composables/useTheme.js';
 import { useRouter } from './composables/useRouter.js';
+import { trackPageview } from './services/analytics.js';
 import PlayView from './components/PlayView.vue';
 import ArchiveView from './components/ArchiveView.vue';
 import DevToolsView from './components/DevToolsView.vue';
@@ -67,6 +68,17 @@ const page = computed(() => {
   if (route.segments[0] === 'story') return 'story';
   return 'play';
 });
+
+// A manual $pageview per navigation -- see services/analytics.js for why
+// PostHog's own pageview autocapture can't see this hash-based router.
+watch(
+  () => route.path,
+  () => {
+    const puzzleNumberSegment = page.value === 'play' ? route.segments[1] : undefined;
+    trackPageview(page.value, puzzleNumberSegment !== undefined ? { puzzle_number: puzzleNumberSegment } : undefined);
+  },
+  { immediate: true }
+);
 </script>
 
 <template>

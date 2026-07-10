@@ -25,7 +25,8 @@ import {
 } from '../logic/rules.js';
 import { vibrateJump, vibrateRoundOver } from '../fx/haptics.js';
 import { playSound, playRoundOverChime, soundState } from '../fx/sound.js';
-import { recordResult } from '../logic/history.js';
+import { recordResult, getResultForPuzzle } from '../logic/history.js';
+import { EVENTS, track, syncPlayerStatsToPostHog } from '../services/analytics.js';
 
 function sum(numbers) {
   return numbers.reduce((total, value) => total + value, 0);
@@ -36,11 +37,13 @@ function sum(numbers) {
  *
  * @param {{geometry: object, holeColors: number[], colorCount: number, par: number[], cellCount: number}} puzzle
  *   a puzzle definition, e.g. from logic/daily.js's getTodaysPuzzle()
+ * @param {{source?: 'daily'|'link'|'custom'}} [options] - where this round was launched from, for analytics only (see services/analytics.js)
  * @returns the reactive game state and the functions to play it
  */
-export function useGame(puzzle) {
+export function useGame(puzzle, options = {}) {
   const geometry = puzzle.geometry;
   const startingMasks = createStartingMasks(puzzle.cellCount, puzzle.holeColors, puzzle.colorCount);
+  const source = options.source ?? 'daily';
 
   // `state` is the one reactive object every other function below reads
   // from and writes to. Because it's created with Vue's reactive(), any
@@ -55,6 +58,25 @@ export function useGame(puzzle) {
     // every time (never mutated in place) so Board.vue can watch it and
     // replay the "peg travels over, jumped peg dissolves" animation.
     lastMove: null,
+    // Analytics-only bookkeeping (see services/analytics.js's puzzle_completed
+    // event) -- kept here rather than as loose module-level variables so a
+    // fresh useGame() call (a new puzzle, or a re-visit of the same one)
+    // always starts them clean.
+    undoCount: 0,
+    resetCount: 0,
+    roundStartedAt: Date.now(),
+    firstMoveTracked: false,
+    incompleteReported: false,
+  });
+
+  track(EVENTS.PUZZLE_STARTED, {
+    puzzle_number: puzzle.puzzleNumber ?? null,
+    puzzle_date: puzzle.date ?? null,
+    board_shape: puzzle.boardId ?? null,
+    color_count: puzzle.colorCount,
+    par_total: sum(puzzle.par),
+    source,
+    already_played: puzzle.puzzleNumber !== null && puzzle.puzzleNumber !== undefined && Boolean(getResultForPuzzle(puzzle.puzzleNumber)),
   });
 
   const pegsRemaining = computed(() => countPegsRemaining(state.masks));
@@ -163,6 +185,11 @@ export function useGame(puzzle) {
     state.selectedHole = null;
     state.lastMove = move;
 
+    if (!state.firstMoveTracked) {
+      state.firstMoveTracked = true;
+      track(EVENTS.PUZZLE_FIRST_MOVE, { puzzle_number: puzzle.puzzleNumber ?? null });
+    }
+
     // Buzz and "landing" sound for the jump itself, plus an extra buzz and
     // chime once the round ends -- ANY ending, not just reaching the
     // puzzle's par, so getting stuck early still feels like a clear,
@@ -177,19 +204,36 @@ export function useGame(puzzle) {
       // Scheduled to start once the move sound's tone has finished, rather
       // than stacking both sounds on top of each other.
       playRoundOverChime(soundState.move.duration);
+      const overParAtEnd = sum(finalPegsRemaining) - sum(puzzle.par);
       // Custom editor designs (puzzleNumber === null) aren't real daily
       // puzzles, so components/ArchiveView.vue has nothing to show for
       // them -- there's nothing worth recording.
       if (puzzle.puzzleNumber !== null) {
-        const overParAtEnd = sum(finalPegsRemaining) - sum(puzzle.par);
         recordResult(puzzle.puzzleNumber, { pegsRemaining: finalPegsRemaining, overPar: overParAtEnd, won });
+        syncPlayerStatsToPostHog();
       }
+      track(EVENTS.PUZZLE_COMPLETED, {
+        puzzle_number: puzzle.puzzleNumber ?? null,
+        puzzle_date: puzzle.date ?? null,
+        board_shape: puzzle.boardId ?? null,
+        color_count: puzzle.colorCount,
+        won,
+        rank: getRankForOverPar(overParAtEnd).rank,
+        over_par: overParAtEnd,
+        move_count: state.moveCount,
+        undo_count: state.undoCount,
+        reset_count: state.resetCount,
+        duration_ms: Date.now() - state.roundStartedAt,
+        source,
+      });
     }
   }
 
   /** Undoes the most recent jump, if there is one. Unlimited undos. */
   function undo() {
     if (state.undoStack.length === 0) return;
+    track(EVENTS.PUZZLE_UNDO_USED, { puzzle_number: puzzle.puzzleNumber ?? null, move_count_before_undo: state.moveCount });
+    state.undoCount += 1;
     state.masks = state.undoStack.pop();
     state.moveCount = Math.max(0, state.moveCount - 1);
     state.selectedHole = null;
@@ -199,11 +243,19 @@ export function useGame(puzzle) {
 
   /** Resets the board back to the puzzle's starting position. */
   function reset() {
+    // A reset before any move has been made isn't a meaningful "the player
+    // is frustrated" signal -- it's just clearing an idle selection, or a
+    // stray tap. Only worth recording once there was actual progress to give up.
+    if (state.moveCount > 0) {
+      track(EVENTS.PUZZLE_RESET_USED, { puzzle_number: puzzle.puzzleNumber ?? null, move_count_before_reset: state.moveCount });
+      state.resetCount += 1;
+    }
     state.masks = startingMasks;
     state.selectedHole = null;
     state.lastMove = null;
     state.undoStack = [];
     state.moveCount = 0;
+    state.roundStartedAt = Date.now();
   }
 
   // NOTE: we wrap the returned object in reactive() so that computed refs
