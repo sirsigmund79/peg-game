@@ -14,6 +14,17 @@
 // see logic/story/story.js's isNodeUnlocked() for how that fork actually
 // unlocks both branches at once.
 //
+// Each node's `friends` are the animals hidden under specific starting
+// pegs -- clearing a friend's hole (by any legal jump, same rules as
+// always) reveals them; winning means every friend on that board is
+// revealed by the time no moves remain (see logic/story/story.js's
+// getChapterPuzzle(), and useGame.js's hasWon). Every friend index below
+// was picked from a REAL solver-reconstructed solution for that node's
+// exact puzzle (see the "friend-hole candidates" step in the story-mode
+// plan) -- an originally-occupied hole that a genuine winning line of play
+// leaves empty -- so every node is guaranteed solvable, not just
+// plausible-looking.
+//
 // Pure data -- no Vue, no game logic.
 // ============================================================================
 
@@ -31,18 +42,18 @@ export const FOREST_TRAIL_NODES = [
       '--color-peg': '#5a9e2f',
       '--color-accent': '#5a9e2f',
     },
+    friends: [{ index: 7, emoji: '🐰' }],
     intro: [
       "Word's gotten round the meadow: everyone's meeting at the old treehouse tonight.",
-      "Not everyone's found their way through the tall grass yet -- same-color friends know the way for each other. Walk them through.",
+      "There's a rabbit hiding somewhere under the grass, waiting for a same-color friend to clear the way. Find them.",
     ],
-    outroWin: ["Every last one found their way out of the meadow.", "Onward -- the orchard's just past that fence."],
+    outroWin: ["The rabbit's out and stretching in the sun.", "Onward -- the orchard's just past that fence."],
     outroLeftover: [
-      "A few are still finding their footing in the grass. No rush -- the path waits for them.",
-      "Onward -- the orchard's just past that fence.",
+      "Still just grass and quiet out there. The rabbit's in no rush -- the path waits for them.",
     ],
     flavor: {
       onFirstMove: 'First hop through the grass. Off we go.',
-      onLastPeg: 'Just the one left, taking their time about it.',
+      onLastPeg: 'Just the one peg left between here and a rabbit.',
     },
   },
   {
@@ -58,15 +69,19 @@ export const FOREST_TRAIL_NODES = [
       '--color-peg': '#c9698f',
       '--color-accent': '#c9698f',
     },
+    friends: [
+      { index: 3, emoji: '🐿️' },
+      { index: 13, emoji: '🐿️' },
+    ],
     intro: [
       "The orchard's heavy with fruit and half-asleep in the afternoon sun.",
-      "Somewhere under these trees, everyone's trying to find their own kind before the light goes.",
+      'A couple of squirrels have squirreled themselves away under the branches. Clear their way out.',
     ],
-    outroWin: ["Orchard's empty -- everyone's headed for the river."],
-    outroLeftover: ["A couple are still napping under the branches. They'll catch up."],
+    outroWin: ["Both squirrels are out and climbing -- orchard's empty, everyone's headed for the river."],
+    outroLeftover: ['One squirrel found their way. The other is still napping under the branches -- no hurry.'],
     flavor: {
       onFirstMove: 'An apple drops somewhere. Unrelated, probably.',
-      onLastPeg: 'One left, and it is in absolutely no hurry.',
+      onLastPeg: 'One peg left between a squirrel and the afternoon sun.',
     },
   },
   {
@@ -82,15 +97,21 @@ export const FOREST_TRAIL_NODES = [
       '--color-peg': '#2e7ea3',
       '--color-accent': '#2e7ea3',
     },
+    friends: [
+      { index: 6, emoji: '🐸' },
+      { index: 16, emoji: '🐸' },
+    ],
     intro: [
       'The river forks here, and so does the path.',
-      "Clear the way and you'll see both roads onward -- the long way past the bridge, or a shortcut straight to the treehouse for the bold.",
+      "Two frogs are tucked in under the rocks, waiting on same-color friends to clear their way to the water.",
     ],
-    outroWin: ["The riverbank's clear. Both paths onward are yours now -- take your pick."],
-    outroLeftover: ["A few are still wading at the edge, unbothered. Both paths onward are still yours to take."],
+    outroWin: [
+      "Both frogs make the leap into the river. The riverbank's clear -- both paths onward are yours now, take your pick.",
+    ],
+    outroLeftover: ["One frog made it to the water. The other's still tucked under its rock, unbothered."],
     flavor: {
-      onFirstMove: 'The water\'s cold. Everyone says so. Everyone gets in anyway.',
-      onLastPeg: "Last one at the water's edge, working up the nerve.",
+      onFirstMove: "The water's cold. Everyone says so. Everyone gets in anyway.",
+      onLastPeg: "Last peg at the water's edge, working up the nerve.",
     },
   },
   {
@@ -106,15 +127,20 @@ export const FOREST_TRAIL_NODES = [
       '--color-peg': '#7a5a34',
       '--color-accent': '#7a5a34',
     },
+    friends: [
+      { index: 3, emoji: '🦉' },
+      { index: 8, emoji: '🦉' },
+      { index: 13, emoji: '🦉' },
+    ],
     intro: [
       "The old bridge creaks, but it's held for longer than anyone can remember.",
-      'Everyone crossing wants a same-color hand to hold. Get them all across.',
+      "Three owls are roosted under the boards, blinking, waiting for same-color friends to clear a path up.",
     ],
-    outroWin: ["Bridge is clear. The bramble patch is just on the other side."],
-    outroLeftover: ["A few are still halfway across, taking it slow. The bridge isn't going anywhere."],
+    outroWin: ["All three owls blink awake on the railing. Bridge is clear -- the bramble patch is just on the other side."],
+    outroLeftover: ["A couple of owls made it up. At least one's still roosted below, in no hurry at all."],
     flavor: {
       onFirstMove: 'The bridge creaks underfoot. Everyone pretends not to notice.',
-      onLastPeg: 'One left on the bridge, admiring the view.',
+      onLastPeg: 'One peg left between here and an owl.',
     },
   },
   {
@@ -130,17 +156,22 @@ export const FOREST_TRAIL_NODES = [
       '--color-peg': '#7d4a96',
       '--color-accent': '#7d4a96',
     },
+    friends: [
+      { index: 2, emoji: '🦔' },
+      { index: 9, emoji: '🦔' },
+      { index: 14, emoji: '🦔' },
+    ],
     intro: [
       "The bramble patch is thick, thorny, and somehow everyone's favorite shortcut anyway.",
-      'Same-color friends can guide each other through without a scratch. Get everyone clear.',
+      "Three hedgehogs have curled up right in the thorns -- fitting, honestly. Same-color friends can guide them out without a scratch.",
     ],
-    outroWin: ["Bramble's clear, thorns and all. The treehouse lights are already up ahead."],
+    outroWin: ["All three hedgehogs uncurl and waddle clear. Bramble's done, thorns and all -- the treehouse lights are already up ahead."],
     outroLeftover: [
-      'A few are still tangled up in there, in no real hurry to leave. The treehouse lights are still up ahead, whenever they\'re ready.',
+      "A couple of hedgehogs made it out. At least one's still curled up in there, in no real hurry to leave.",
     ],
     flavor: {
       onFirstMove: "Something rustles in the brambles. It's fine. Probably.",
-      onLastPeg: 'One left in the thorns, apparently quite comfortable.',
+      onLastPeg: 'One peg left between here and a very patient hedgehog.',
     },
   },
   {
@@ -156,20 +187,26 @@ export const FOREST_TRAIL_NODES = [
       '--color-peg': '#b5651d',
       '--color-accent': '#b5651d',
     },
+    friends: [
+      { index: 3, emoji: '🐝' },
+      { index: 6, emoji: '🐝' },
+      { index: 13, emoji: '🐝' },
+      { index: 17, emoji: '🐝' },
+    ],
     intro: [
       'The treehouse, lit up gold, right where the whole forest said it would be.',
-      "Whoever's left just needs one last hand finding their way up. This is the last of it -- make it count.",
+      "A whole hive's worth of bees is tucked into the honeycomb-shaped hollows out front. Clear the way for every last one -- this is the last of it, make it count.",
     ],
     outroWin: [
-      "Everyone's up in the treehouse. The whole forest showed up, in the end.",
+      "Every bee finds its way home, humming. The whole forest showed up, in the end.",
       "Somewhere below, the meadow's already humming with word of next season's gathering.",
     ],
     outroLeftover: [
-      "Most everyone's made it up into the treehouse. A few are still finding the ladder -- there's no version of tonight where they're not welcome whenever they get there.",
+      "Most of the hive made it in. A few bees are still waiting on their hollow -- there's no version of tonight where they're not welcome whenever they get there.",
     ],
     flavor: {
       onFirstMove: 'Up the ladder. Last leg of the trail.',
-      onLastPeg: 'One left below the treehouse, looking up at all those lit windows.',
+      onLastPeg: 'One peg left between here and a very patient bee.',
     },
   },
 ];
