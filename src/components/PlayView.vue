@@ -21,7 +21,7 @@
   ============================================================================
 -->
 <script setup>
-import { ref, watch, computed } from 'vue';
+import { ref, watch, computed, onBeforeUnmount } from 'vue';
 import { getTodaysPuzzle, getPuzzleForNumber } from '../logic/daily.js';
 import { useGame } from '../composables/useGame.js';
 import { useRouter } from '../composables/useRouter.js';
@@ -73,10 +73,50 @@ const formattedDate = computed(() => {
 watch(
   () => route.path,
   () => {
+    clearResultHold();
+    showResult.value = false;
     puzzle.value = resolvePuzzle();
     game.value = useGame(puzzle.value);
   }
 );
+
+// The board itself reacts to `game.roundOver` the instant it flips (see
+// Board.vue's own `round-over` cues), but ResultOverlay -- and the page
+// scroll it triggers -- is held back a beat so the player gets a moment on
+// the board's own end-of-round flourish before their eye gets yanked down
+// to the results.
+const prefersReducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+const RESULT_HOLD_MS = 800;
+const showResult = ref(false);
+let resultHoldTimeoutId = null;
+
+function clearResultHold() {
+  if (resultHoldTimeoutId !== null) {
+    clearTimeout(resultHoldTimeoutId);
+    resultHoldTimeoutId = null;
+  }
+}
+
+watch(
+  () => game.value.roundOver,
+  (isOver) => {
+    clearResultHold();
+    if (!isOver) {
+      showResult.value = false;
+      return;
+    }
+    if (prefersReducedMotion) {
+      showResult.value = true;
+      return;
+    }
+    resultHoldTimeoutId = setTimeout(() => {
+      showResult.value = true;
+      resultHoldTimeoutId = null;
+    }, RESULT_HOLD_MS);
+  }
+);
+
+onBeforeUnmount(clearResultHold);
 </script>
 
 <template>
@@ -98,12 +138,17 @@ watch(
         <Board :game="game" />
       </div>
 
-      <ResultOverlay v-if="game.roundOver" :game="game" :puzzle="puzzle" />
+      <ResultOverlay v-if="showResult" :game="game" :puzzle="puzzle" />
 
       <TemporaryWatchSolveButton v-if="isDevBuild" :game="game" />
     </div>
 
-    <Controls :can-undo="game.state.undoStack.length > 0" @undo="game.undo()" @reset="game.reset()" />
+    <Controls
+      :can-undo="game.state.undoStack.length > 0"
+      :round-over="game.roundOver"
+      @undo="game.undo()"
+      @reset="game.reset()"
+    />
   </div>
 </template>
 

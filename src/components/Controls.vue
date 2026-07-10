@@ -11,6 +11,11 @@
 <script setup>
 defineProps({
   canUndo: { type: Boolean, required: true },
+  // Once the round is over there's nothing left to undo back into (the
+  // board is done, not just paused) -- Undo disappears entirely rather
+  // than sitting there disabled, so Reset (the only way to keep playing)
+  // is the one obvious action left.
+  roundOver: { type: Boolean, required: true },
 });
 
 const emit = defineEmits(['undo', 'reset']);
@@ -18,7 +23,9 @@ const emit = defineEmits(['undo', 'reset']);
 
 <template>
   <div class="utility-zone">
-    <button type="button" class="control-button outline" :disabled="!canUndo" @click="emit('undo')">Undo</button>
+    <button v-if="!roundOver" type="button" class="control-button outline" :disabled="!canUndo" @click="emit('undo')">
+      Undo
+    </button>
     <button type="button" class="control-button solid" @click="emit('reset')">Reset</button>
   </div>
 </template>
