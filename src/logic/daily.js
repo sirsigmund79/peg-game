@@ -29,17 +29,18 @@ import { SCHEDULED_PUZZLES } from './scheduledPuzzles.js';
 import { buildDailyPuzzleFromDesign } from './customBoard.js';
 import { getEmptyHolesFromColors } from './rules.js';
 
-// NOTE: this is "day zero" of the puzzle numbering scheme -- deliberately
-// reset here (was 2024-01-01) alongside the puzzle pool regeneration that
-// fixed the per-color generation rules (see scripts/generate-puzzle-pool.js).
-// The old epoch meant "today" was already puzzle #900-something before the
-// game had any real players, silently burning that many pool entries on
-// dates nobody ever saw. This reset makes the day this shipped puzzle #1.
+// NOTE: this is "day zero" of the puzzle numbering scheme. Moved back 40
+// days (was 2026-07-08) while the game was still brand new and had no real
+// player history yet, purely so the archive would open with a real month
+// of past days already in it instead of a handful of upcoming previews --
+// see components/ArchiveView.vue. Puzzle numbering (and thus which pool
+// entry each date gets) is unaffected other than shifting which date each
+// number lands on.
 // Never change this again once the game has real players -- it would
 // shuffle everyone's puzzle history.
 const EPOCH_YEAR = 2026;
-const EPOCH_MONTH_INDEX = 6; // July
-const EPOCH_DAY = 8;
+const EPOCH_MONTH_INDEX = 4; // May
+const EPOCH_DAY = 29;
 const EPOCH_LOCAL_MS = new Date(EPOCH_YEAR, EPOCH_MONTH_INDEX, EPOCH_DAY).getTime();
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 

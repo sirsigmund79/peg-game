@@ -26,8 +26,10 @@ const todayNumber = getTodayPuzzleNumber();
 
 // Beta cap: the full archive would otherwise go back to puzzle #0. Keep it
 // to a short, recent window for now -- see this component's other callers
-// if this ever needs to grow back into a real full history.
-const ARCHIVE_WINDOW_DAYS = 20;
+// if this ever needs to grow back into a real full history. Sized to 50
+// (was 20) so the whole backfilled history since the epoch (see
+// logic/daily.js) fits, with room to spare as more real days pass.
+const ARCHIVE_WINDOW_DAYS = 50;
 const oldestPuzzleNumber = Math.max(0, todayNumber - (ARCHIVE_WINDOW_DAYS - 1));
 
 // Read once rather than per-row -- logic/history.js's getResultForPuzzle()

@@ -13,7 +13,7 @@
   ============================================================================
 -->
 <script setup>
-import { computed } from 'vue';
+import { computed, watch } from 'vue';
 import { useTheme } from './composables/useTheme.js';
 import { useRouter } from './composables/useRouter.js';
 import PlayView from './components/PlayView.vue';
@@ -29,7 +29,31 @@ useTheme(); // applies the Moose theme's CSS variables to the page -- see compos
 // compiler can't parse `import.meta` expressions directly.
 const isDevBuild = import.meta.env.DEV;
 
-const { route } = useRouter();
+const { route, navigate } = useRouter();
+
+// Whether the current hash actually points at a real page. Anything else
+// (a typo'd path, a stale/removed link, a non-numeric puzzle number) isn't
+// a page we have -- see the redirect-to-home watcher below.
+const isKnownRoute = computed(() => {
+  const [first, second] = route.segments;
+  if (first === undefined) return true; // "#/" -- home
+  if (first === 'archive') return true;
+  if (first === 'dev') return isDevBuild;
+  if (first === 'play') return second === undefined || /^-?\d+$/.test(second);
+  return false;
+});
+
+// A bad link should land on the home page, not a blank/broken screen --
+// e.g. someone opens the site on an old, mistyped, or since-removed link.
+// This corrects the URL itself (not just what's shown), so the address bar
+// and reload both agree it's the home page.
+watch(
+  isKnownRoute,
+  (known) => {
+    if (!known) navigate('/');
+  },
+  { immediate: true }
+);
 
 // Any "#/play..." path (with or without a puzzle number) is the play page;
 // "#/archive" is the archive; "#/dev" is the dev tools (only in a dev
