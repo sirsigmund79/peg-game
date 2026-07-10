@@ -18,8 +18,11 @@
     3. FOOTER: one full-width "Share Score" button that copies a spoiler-
        safe result line to the clipboard -- including the puzzle's date and
        a direct link back to that exact day, so sharing an archive day
-       sends people there, not just to today's puzzle -- and a second
-       button to the archive.
+       sends people there, not just to today's puzzle.
+  Once the rank reveal below finishes, this emits `revealed` -- PlayView.vue
+  uses that as the cue to bring in ArchiveDayStrip.vue (the archive callout)
+  below the Undo/Reset controls, so that strip's own entrance never competes
+  with this modal's still-playing reveal.
   This component is purely presentational -- it reads the final state from
   the `game` prop and formats the share text via services/viral.js.
   ============================================================================
@@ -30,7 +33,6 @@ import { buildShareText, copyTextToClipboard } from '../services/viral.js';
 import { getRankForOverPar, getColorAt } from '../logic/rules.js';
 import { getPegColor } from '../logic/pegColors.js';
 import { computeDisplayPositions } from '../logic/boardLayout.js';
-import { useRouter } from '../composables/useRouter.js';
 import { EVENTS, track } from '../services/analytics.js';
 import MiniBoard from './MiniBoard.vue';
 
@@ -39,7 +41,7 @@ const props = defineProps({
   puzzle: { type: Object, required: true },
 });
 
-const { navigate } = useRouter();
+const emit = defineEmits(['revealed']);
 
 // --- the rank reveal: stays hidden until the score count-up (below) has
 // finished, then pops in once as the achieved rank -- no more climbing
@@ -75,7 +77,7 @@ function runPegPulses() {
   const sequence = pegPulseSequence.value;
   if (pulseStepIndex.value >= sequence.length) {
     pulsingHoleIndex.value = -1;
-    rankRevealed.value = true;
+    finishReveal();
     return;
   }
   const step = sequence[pulseStepIndex.value];
@@ -86,6 +88,11 @@ function runPegPulses() {
     pulseStepIndex.value += 1;
     runPegPulses();
   }, PEG_PULSE_STEP_MS);
+}
+
+function finishReveal() {
+  rankRevealed.value = true;
+  emit('revealed');
 }
 
 const modalRef = ref(null);
@@ -122,7 +129,7 @@ onMounted(async () => {
     runPegPulses();
   } else {
     displayedScore.value = [...props.game.pegsRemaining];
-    rankRevealed.value = true;
+    finishReveal();
   }
 });
 
@@ -161,10 +168,6 @@ async function handleShareClick() {
   const didCopy = await copyTextToClipboard(shareText.value);
   shareStatusMessage.value = didCopy ? 'Copied to clipboard!' : "Couldn't copy -- try again, or share a screenshot instead.";
   track(EVENTS.SHARE_COPY_RESULT, { puzzle_number: props.puzzle.puzzleNumber ?? null, success: didCopy });
-}
-
-function goToArchive() {
-  navigate('/archive');
 }
 </script>
 
@@ -205,8 +208,6 @@ function goToArchive() {
     <footer class="result-footer">
       <button type="button" class="share-button" @click="handleShareClick">Share Score 📋</button>
       <p v-if="shareStatusMessage" class="share-status" role="status">{{ shareStatusMessage }}</p>
-
-      <button type="button" class="archive-button" @click="goToArchive">Missed a day? Browse the archive 📅</button>
     </footer>
   </div>
 </template>
@@ -428,36 +429,5 @@ function goToArchive() {
   font-family: var(--font-ui);
   font-size: 0.85rem;
   color: var(--color-ink-dim);
-}
-
-.archive-button {
-  width: 100%;
-  min-height: 44px;
-  padding: 8px 20px;
-  font-family: var(--font-ui);
-  font-weight: 700;
-  font-size: 0.85rem;
-  color: var(--color-accent);
-  background: transparent;
-  border-width: var(--control-border-width);
-  border-style: solid;
-  border-color: var(--color-accent);
-  border-radius: 14px;
-  cursor: pointer;
-  transition:
-    background-color 0.15s ease,
-    color 0.15s ease;
-}
-
-@media (hover: hover) {
-  .archive-button:hover {
-    background: var(--color-accent);
-    color: var(--color-card-bg);
-  }
-}
-
-.archive-button:focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 2px;
 }
 </style>

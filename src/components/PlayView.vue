@@ -31,6 +31,7 @@ import Board from './Board.vue';
 import StatBar from './StatBar.vue';
 import Controls from './Controls.vue';
 import ResultOverlay from './ResultOverlay.vue';
+import ArchiveDayStrip from './ArchiveDayStrip.vue';
 import TemporaryWatchSolveButton from './TemporaryWatchSolveButton.vue';
 
 const isDevBuild = import.meta.env.DEV;
@@ -110,6 +111,7 @@ watch(
     reportIncompleteIfNeeded();
     clearResultHold();
     showResult.value = false;
+    showArchiveStrip.value = false;
     puzzle.value = resolvePuzzle();
     game.value = useGame(puzzle.value, { source: resolveSource() });
   }
@@ -123,6 +125,11 @@ watch(
 const prefersReducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 const RESULT_HOLD_MS = 800;
 const showResult = ref(false);
+// ArchiveDayStrip.vue (the archive callout below Undo/Reset) only comes in
+// once ResultOverlay's OWN reveal animation (rank + score count-up) has
+// finished -- see the `@revealed` listener below -- so it never competes
+// with that still-playing sequence for attention.
+const showArchiveStrip = ref(false);
 let resultHoldTimeoutId = null;
 
 function clearResultHold() {
@@ -138,6 +145,7 @@ watch(
     clearResultHold();
     if (!isOver) {
       showResult.value = false;
+      showArchiveStrip.value = false;
       return;
     }
     if (prefersReducedMotion) {
@@ -178,7 +186,7 @@ onBeforeUnmount(() => {
         <Board :game="game" />
       </div>
 
-      <ResultOverlay v-if="showResult" :game="game" :puzzle="puzzle" />
+      <ResultOverlay v-if="showResult" :game="game" :puzzle="puzzle" @revealed="showArchiveStrip = true" />
 
       <TemporaryWatchSolveButton v-if="isDevBuild" :game="game" />
     </div>
@@ -189,6 +197,8 @@ onBeforeUnmount(() => {
       @undo="game.undo()"
       @reset="game.reset()"
     />
+
+    <ArchiveDayStrip v-if="showArchiveStrip && puzzle.puzzleNumber != null" :key="puzzle.puzzleNumber" />
   </div>
 </template>
 

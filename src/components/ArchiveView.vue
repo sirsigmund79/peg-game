@@ -62,6 +62,7 @@ const monthGroups = computed(() => {
       day: Number(puzzle.date.slice(8, 10)),
       geometry: puzzle.geometry,
       emptyHoles: puzzle.emptyHoles,
+      holeColors: puzzle.holeColors,
       pegCount: puzzle.cellCount - puzzle.emptyHoles.length,
       isToday: puzzleNumber === todayNumber,
       result: savedResult ? { ...savedResult, ...getRankForOverPar(savedResult.overPar) } : null,
@@ -98,7 +99,7 @@ function playPuzzle(puzzleNumber) {
             @click="playPuzzle(entry.puzzleNumber)"
           >
             <span class="entry-day">{{ entry.isToday ? 'Today' : entry.day }}</span>
-            <PuzzleGlyph :geometry="entry.geometry" :empty-holes="entry.emptyHoles" class="entry-glyph" />
+            <PuzzleGlyph :geometry="entry.geometry" :empty-holes="entry.emptyHoles" :hole-colors="entry.holeColors" class="entry-glyph" />
             <span class="entry-pegs">{{ entry.pegCount }} pegs</span>
             <span v-if="entry.result" class="entry-result">
               <span aria-hidden="true">{{ entry.result.emoji }}</span>
