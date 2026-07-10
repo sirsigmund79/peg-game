@@ -131,7 +131,12 @@ function backToMap() {
           <p class="move-line">{{ game.state.moveCount }} moves</p>
         </div>
         <p v-if="flavorLine" class="flavor-line">{{ flavorLine }}</p>
-        <Controls :can-undo="game.state.undoStack.length > 0" @undo="game.undo()" @reset="game.reset()" />
+        <Controls
+          :can-undo="game.state.undoStack.length > 0"
+          :round-over="game.roundOver"
+          @undo="game.undo()"
+          @reset="game.reset()"
+        />
       </template>
 
       <template v-else>

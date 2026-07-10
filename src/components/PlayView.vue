@@ -143,7 +143,12 @@ onBeforeUnmount(clearResultHold);
       <TemporaryWatchSolveButton v-if="isDevBuild" :game="game" />
     </div>
 
-    <Controls :can-undo="game.state.undoStack.length > 0" @undo="game.undo()" @reset="game.reset()" />
+    <Controls
+      :can-undo="game.state.undoStack.length > 0"
+      :round-over="game.roundOver"
+      @undo="game.undo()"
+      @reset="game.reset()"
+    />
   </div>
 </template>
 
