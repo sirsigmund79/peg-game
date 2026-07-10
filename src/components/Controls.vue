@@ -65,11 +65,6 @@ const emit = defineEmits(['undo', 'reset']);
   border-color: var(--color-accent);
 }
 
-.control-button.outline:not(:disabled):hover {
-  background: var(--color-accent);
-  color: var(--color-card-bg);
-}
-
 .control-button.outline:disabled {
   color: var(--color-ink-dim);
   border-color: var(--color-card-border);
@@ -83,9 +78,20 @@ const emit = defineEmits(['undo', 'reset']);
   border-color: var(--color-peg);
 }
 
-.control-button.solid:hover {
-  background: var(--color-ink);
-  border-color: var(--color-ink);
+/* Hover only on devices that actually have a hovering pointer -- on touch,
+   the browser fakes :hover on tap and doesn't clear it until the next tap
+   lands elsewhere, so an unguarded :hover here would leave the button stuck
+   looking pressed after every tap. */
+@media (hover: hover) {
+  .control-button.outline:not(:disabled):hover {
+    background: var(--color-accent);
+    color: var(--color-card-bg);
+  }
+
+  .control-button.solid:hover {
+    background: var(--color-ink);
+    border-color: var(--color-ink);
+  }
 }
 
 .control-button:focus-visible {

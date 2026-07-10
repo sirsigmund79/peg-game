@@ -47,9 +47,11 @@ import { audioState, toggleMuted } from '../fx/sound.js';
   cursor: pointer;
 }
 
-.sound-toggle:hover {
-  color: var(--color-header-text);
-  border-color: var(--color-header-text);
+@media (hover: hover) {
+  .sound-toggle:hover {
+    color: var(--color-header-text);
+    border-color: var(--color-header-text);
+  }
 }
 
 .sound-toggle:focus-visible {

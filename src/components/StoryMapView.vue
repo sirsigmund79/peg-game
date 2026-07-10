@@ -168,8 +168,10 @@ function goToNode(node) {
   transition: transform 0.15s ease;
 }
 
-.node:not(:disabled):hover .node-thumb {
-  transform: scale(1.06);
+@media (hover: hover) {
+  .node:not(:disabled):hover .node-thumb {
+    transform: scale(1.06);
+  }
 }
 
 .node.locked .node-thumb {
