@@ -28,6 +28,8 @@ export const EVENTS = {
   SHARE_CLICKED: 'share_clicked',
   SHARE_COPY_RESULT: 'share_copy_result',
   ARCHIVE_PUZZLE_SELECTED: 'archive_puzzle_selected',
+  ARCHIVE_TEASER_DAY_SELECTED: 'archive_teaser_day_selected',
+  ARCHIVE_TEASER_EXPLORE_CLICKED: 'archive_teaser_explore_clicked',
   SOUND_TOGGLED: 'sound_toggled',
 };
 

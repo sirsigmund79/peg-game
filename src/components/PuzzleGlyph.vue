@@ -6,15 +6,24 @@
   using the same layout math as Board.vue's holePositions (empty holes get
   no dot at all). Used by ArchiveView.vue so a puzzle's shape can be
   recognized (or guessed at) at a glance without spoiling it with a text
-  label.
+  label. Also used by ArchiveDayStrip.vue, larger and in the puzzle's real
+  peg colors (via the optional `size`/`holeColors` props below) -- ArchiveView
+  itself keeps passing neither, so its dots stay the original flat, small
+  silhouette.
   ============================================================================
 -->
 <script setup>
 import { computed } from 'vue';
+import { getPegColor } from '../logic/pegColors.js';
 
 const props = defineProps({
   geometry: { type: Object, required: true },
   emptyHoles: { type: Array, default: () => [] },
+  size: { type: Number, default: 34 },
+  // Same shape as a puzzle's `holeColors` (logic/daily.js): color index per
+  // hole, or -1/absent for empty. When omitted, dots fall back to a flat
+  // `currentColor` silhouette instead of each peg's real color.
+  holeColors: { type: Array, default: () => [] },
 });
 
 /** Deterministic pseudo-random in [0, 1), seeded by an integer so a given puzzle's dots always render with the same size/opacity -- no reshuffle on re-render. */
@@ -60,6 +69,7 @@ const dots = computed(() => {
       y: padding + ((cell.y - minY) / heightSpan) * usable,
       r: size,
       opacity,
+      color: props.holeColors[index] >= 0 ? getPegColor(props.holeColors[index]).hex : null,
     });
   });
 
@@ -68,16 +78,23 @@ const dots = computed(() => {
 </script>
 
 <template>
-  <svg class="puzzle-glyph" viewBox="0 0 100 100" aria-hidden="true">
-    <circle v-for="(dot, index) in dots" :key="index" :cx="dot.x" :cy="dot.y" :r="dot.r" :fill-opacity="dot.opacity" fill="currentColor" />
+  <svg class="puzzle-glyph" :style="{ width: size + 'px', maxWidth: '100%' }" viewBox="0 0 100 100" aria-hidden="true">
+    <circle
+      v-for="(dot, index) in dots"
+      :key="index"
+      :cx="dot.x"
+      :cy="dot.y"
+      :r="dot.r"
+      :fill-opacity="dot.color ? 1 : dot.opacity"
+      :fill="dot.color ?? 'currentColor'"
+    />
   </svg>
 </template>
 
 <style scoped>
 .puzzle-glyph {
-  width: 34px;
-  height: 34px;
-  flex: 0 0 34px;
+  flex: 0 1 auto;
+  aspect-ratio: 1 / 1;
   color: var(--color-ink-secondary);
 }
 </style>
