@@ -19,6 +19,7 @@ import { getTodayPuzzleNumber, getPuzzleForNumber } from '../logic/daily.js';
 import { getHistory } from '../logic/history.js';
 import { getRankForOverPar } from '../logic/rules.js';
 import { useRouter } from '../composables/useRouter.js';
+import { EVENTS, track } from '../services/analytics.js';
 import PuzzleGlyph from './PuzzleGlyph.vue';
 
 const { navigate } = useRouter();
@@ -71,6 +72,12 @@ const monthGroups = computed(() => {
 });
 
 function playPuzzle(puzzleNumber) {
+  track(EVENTS.ARCHIVE_PUZZLE_SELECTED, {
+    puzzle_number: puzzleNumber,
+    days_ago: todayNumber - puzzleNumber,
+    already_played: Boolean(history[puzzleNumber]),
+    is_today: puzzleNumber === todayNumber,
+  });
   navigate(`/play/${puzzleNumber}`);
 }
 </script>

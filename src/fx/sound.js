@@ -21,6 +21,7 @@
 
 import { reactive } from 'vue';
 import { safeGet, safeSet } from '../logic/storage.js';
+import { EVENTS, track } from '../services/analytics.js';
 
 /**
  * Every sound's tunable parameters:
@@ -107,6 +108,7 @@ export const audioState = reactive({ muted: safeGet(MUTED_STORAGE_KEY, false) })
 export function toggleMuted() {
   audioState.muted = !audioState.muted;
   safeSet(MUTED_STORAGE_KEY, audioState.muted);
+  track(EVENTS.SOUND_TOGGLED, { muted: audioState.muted });
 }
 
 // --- the actual synthesis -----------------------------------------------

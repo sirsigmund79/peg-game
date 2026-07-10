@@ -77,6 +77,14 @@ screen in dev mode -- it auto-plays the rest of the current puzzle using
 the solver. This was added for testing and is meant to be deleted later
 (see the TODO comment at the top of `components/TemporaryWatchSolveButton.vue`).
 
+## Analytics
+
+The game is instrumented with [PostHog](https://posthog.com) -- see
+[`docs/ANALYTICS.md`](docs/ANALYTICS.md) for the full event list, dashboards
+worth building, future experiment ideas, and setup instructions (copy
+`.env.example` to `.env.local` and add a PostHog project key to enable it
+locally; without a key, the app runs exactly as before).
+
 ## Level editor
 
 The **Editor** tab (dev mode only) lets you hand-design a board on a
