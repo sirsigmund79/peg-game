@@ -20,8 +20,9 @@ export const SITE_URL = 'https://dot-hop.pages.dev/';
 
 /**
  * Builds the short, spoiler-safe text people post when they share a result
- * -- the puzzle's date, a colored circle emoji plus count per peg color (in
- * color order), and a link straight to that day's puzzle.
+ * -- the puzzle's date, one row per peg color with that color's circle
+ * emoji repeated once per surviving peg (in color order, colors with none
+ * left omitted), and a link straight to that day's puzzle.
  *
  * @param {object} params
  * @param {number[]} params.pegsRemaining - final per-color peg counts, color-index order
@@ -30,7 +31,10 @@ export const SITE_URL = 'https://dot-hop.pages.dev/';
  * @returns {string}
  */
 export function buildShareText({ pegsRemaining, puzzleNumber = null, formattedDate = null }) {
-  const emojiLine = pegsRemaining.map((count, colorIndex) => `${getPegColor(colorIndex).emoji}${count}`).join(' ');
+  const emojiLines = pegsRemaining
+    .map((count, colorIndex) => getPegColor(colorIndex).emoji.repeat(count))
+    .filter((row) => row.length > 0)
+    .join('\n');
   const dateLine = formattedDate ? `Dot Hop — ${formattedDate}\n` : '';
   // The `?ref=share` marker doesn't reveal anything spoiler-y -- it's the
   // only way to tell a session arriving from a shared result apart from any
@@ -38,7 +42,7 @@ export function buildShareText({ pegsRemaining, puzzleNumber = null, formattedDa
   // no other way to know a link came from this button. See the Virality
   // dashboard in docs/ANALYTICS.md.
   const link = puzzleNumber === null ? `${SITE_URL}?ref=share` : `${SITE_URL}?ref=share#/play/${puzzleNumber}`;
-  return `${dateLine}${emojiLine}\n${link}`;
+  return `${dateLine}${emojiLines}\n${link}`;
 }
 
 /**

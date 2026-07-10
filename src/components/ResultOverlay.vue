@@ -408,9 +408,13 @@ function goToArchive() {
     border-color 0.15s ease;
 }
 
-.share-button:hover {
-  background: var(--color-ink);
-  border-color: var(--color-ink);
+/* See components/Controls.vue for why this is gated on (hover: hover) --
+   otherwise a tap leaves the button stuck looking pressed on touch. */
+@media (hover: hover) {
+  .share-button:hover {
+    background: var(--color-ink);
+    border-color: var(--color-ink);
+  }
 }
 
 .share-button:focus-visible {
@@ -445,9 +449,11 @@ function goToArchive() {
     color 0.15s ease;
 }
 
-.archive-button:hover {
-  background: var(--color-accent);
-  color: var(--color-card-bg);
+@media (hover: hover) {
+  .archive-button:hover {
+    background: var(--color-accent);
+    color: var(--color-card-bg);
+  }
 }
 
 .archive-button:focus-visible {

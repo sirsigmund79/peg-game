@@ -291,9 +291,11 @@ function backToMap() {
     border-color 0.15s ease;
 }
 
-.story-button:hover {
-  background: var(--color-ink);
-  border-color: var(--color-ink);
+@media (hover: hover) {
+  .story-button:hover {
+    background: var(--color-ink);
+    border-color: var(--color-ink);
+  }
 }
 
 .story-button:focus-visible {
