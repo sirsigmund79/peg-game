@@ -42,6 +42,15 @@ const props = defineProps({
     type: Object,
     required: true,
   },
+  // Optional -- story mode only (see logic/story/story.js's
+  // getChapterPuzzle()). Each {index, emoji} hides a glyph under that
+  // hole's starting peg; it's rendered once that hole reads as empty
+  // (see shouldShowPeg() below), same instant the peg above it finishes
+  // dissolving. Left empty, this component behaves exactly as before.
+  friendHoles: {
+    type: Array,
+    default: () => [],
+  },
 });
 
 // Position/size math is shared with MiniBoard.vue (the read-only snapshot
@@ -49,6 +58,13 @@ const props = defineProps({
 // apart on how a board shape gets drawn.
 const holePositions = computed(() => computeDisplayPositions(props.game.geometry));
 const holeDiameterPercent = computed(() => computeHoleDiameterPercent(props.game.geometry, holePositions.value));
+
+const friendEmojiByIndex = computed(() => new Map(props.friendHoles.map((friend) => [friend.index, friend.emoji])));
+
+/** @returns {string|undefined} the hidden friend's emoji for hole `index`, if any. */
+function friendEmojiAt(index) {
+  return friendEmojiByIndex.value.get(index);
+}
 
 function isSelected(index) {
   return props.game.state.selectedHole === index;
@@ -61,7 +77,7 @@ function isValidTarget(index) {
 /** Builds a human-readable label for screen readers, per hole. */
 function holeAriaLabel(index) {
   const filled = props.game.holeHasPeg(index);
-  if (!filled) return `Empty hole ${index}`;
+  if (!filled) return friendEmojiAt(index) ? `A friend, revealed, at hole ${index}` : `Empty hole ${index}`;
   return `${getPegColor(props.game.getHoleColor(index)).name} peg at hole ${index}`;
 }
 
@@ -186,6 +202,11 @@ function isDissolving(index) {
       :aria-pressed="isSelected(index)"
       @click="game.selectHole(index)"
     >
+      <Transition name="friend-pop">
+        <span v-if="!shouldShowPeg(index) && friendEmojiAt(index)" class="friend-glyph" aria-hidden="true">{{
+          friendEmojiAt(index)
+        }}</span>
+      </Transition>
       <span
         v-if="shouldShowPeg(index)"
         class="peg"
@@ -332,6 +353,36 @@ function isDissolving(index) {
     transform 0.3s ease;
   opacity: 0;
   transform: scale(0.35);
+}
+
+.friend-glyph {
+  /* --hole-size is a %-of-board-width custom property (fine for the .hole
+     width/height above, which are also percentages of that same
+     containing block) -- font-size percentages mean something totally
+     different (relative to the inherited font-size), so this is a plain
+     fixed size rather than trying to derive one from --hole-size. Holes
+     across every Forest Trail board land in a similar physical range, so
+     one size reads fine everywhere. */
+  font-size: 1.4rem;
+  line-height: 1;
+  user-select: none;
+}
+
+.friend-pop-enter-active {
+  transition:
+    transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
+    opacity 0.2s ease;
+}
+
+.friend-pop-enter-from {
+  opacity: 0;
+  transform: scale(0.3);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .friend-pop-enter-active {
+    transition: none;
+  }
 }
 
 .travel-slot {

@@ -15,7 +15,7 @@ import { computed } from 'vue';
 import { useRouter } from '../composables/useRouter.js';
 import { FOREST_TRAIL_NODES, TRAIL_EDGES } from '../logic/story/forestTrailLevels.js';
 import { getChapterPuzzle, isNodeUnlocked, getBestResult } from '../logic/story/story.js';
-import { createStartingMasks, getRankForOverPar } from '../logic/rules.js';
+import { createStartingMasks } from '../logic/rules.js';
 import { BOARD_CATALOG } from '../logic/boards.js';
 import MiniBoard from './MiniBoard.vue';
 
@@ -24,19 +24,23 @@ const { navigate } = useRouter();
 const nodes = computed(() =>
   FOREST_TRAIL_NODES.map((node) => {
     const puzzle = getChapterPuzzle(node);
-    const result = getBestResult(node.id);
+    const unlocked = isNodeUnlocked(node.id);
+    const won = getBestResult(node.id)?.won === true;
     return {
       ...node,
       geometry: BOARD_CATALOG[node.boardId].geometry,
       masks: createStartingMasks(puzzle.cellCount, puzzle.holeColors, puzzle.colorCount),
-      unlocked: isNodeUnlocked(node.id),
-      result,
-      rank: result ? getRankForOverPar(result.overPar) : null,
+      unlocked,
+      won,
+      // A little hint of who's waiting, once a node is reachable but not
+      // yet cleared -- withheld while locked so it's not spoiled ahead of
+      // time.
+      hintEmoji: unlocked && !won ? node.friends[0]?.emoji : null,
     };
   })
 );
 
-const allGathered = computed(() => nodes.value.every((node) => node.result !== null));
+const allGathered = computed(() => nodes.value.every((node) => node.won));
 
 function goToNode(node) {
   if (!node.unlocked) return;
@@ -78,7 +82,8 @@ function goToNode(node) {
         <span class="node-thumb">
           <MiniBoard :geometry="node.geometry" :masks="node.masks" />
           <span v-if="!node.unlocked" class="lock" aria-hidden="true">🔒</span>
-          <span v-else-if="node.rank" class="rank-badge" :title="node.rank.rank">{{ node.rank.emoji || '✓' }}</span>
+          <span v-else-if="node.won" class="rank-badge" title="All friends found">✓</span>
+          <span v-else-if="node.hintEmoji" class="rank-badge" title="Someone's waiting in there">{{ node.hintEmoji }}</span>
         </span>
         <span class="node-label">{{ node.mapLabel }}</span>
       </button>

@@ -66,13 +66,19 @@ export function useGame(puzzle) {
   // meaningful across boards with different color counts/par totals.
   const overPar = computed(() => sum(pegsRemaining.value) - sum(puzzle.par));
 
-  // The player has WON once no moves remain AND every color matches this
-  // exact puzzle's solver-proven target. If the round is over but that
-  // isn't true, that's a loss (they got stuck early, or a color settled
-  // higher than optimal).
-  const hasWon = computed(
-    () => roundOver.value && pegsRemaining.value.every((count, colorIndex) => count === puzzle.par[colorIndex])
-  );
+  // The player has WON once no moves remain AND either:
+  //  - this puzzle hides friends (see logic/story/story.js's
+  //    getChapterPuzzle()) and every friend's hole has lost its peg, or
+  //  - (the normal/daily game) every color matches this exact puzzle's
+  //    solver-proven target.
+  // If the round is over but neither holds, that's a loss (they got stuck
+  // early, a friend's hole is still covered, or a color settled higher
+  // than optimal).
+  const hasWon = computed(() => {
+    if (!roundOver.value) return false;
+    if (puzzle.friendHoles) return puzzle.friendHoles.every((index) => !holeHasPeg(index));
+    return pegsRemaining.value.every((count, colorIndex) => count === puzzle.par[colorIndex]);
+  });
 
   const rank = computed(() => getRankForOverPar(overPar.value));
 
