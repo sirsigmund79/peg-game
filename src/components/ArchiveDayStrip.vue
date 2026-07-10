@@ -21,10 +21,16 @@
   already use) the tiles instead compress to fit the strip's own width with
   no scrolling at all, since a desktop player has no swipe gesture to
   discover the extra tiles with.
+
+  ResultOverlay.vue's own scroll (see its waitForScrollSettle) only brings
+  the result modal into view -- it fires before this strip even mounts, so
+  on a short screen the strip can still land below the fold. Once mounted,
+  this scrolls itself the rest of the way into view so a player never has
+  to scroll manually just to see the archive callout exists.
   ============================================================================
 -->
 <script setup>
-import { computed } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { getTodayPuzzleNumber, getPuzzleForNumber } from '../logic/daily.js';
 import { getHistory } from '../logic/history.js';
 import { getRankForOverPar } from '../logic/rules.js';
@@ -37,6 +43,13 @@ const RECENT_DAY_COUNT = 3;
 const { navigate } = useRouter();
 const todayNumber = getTodayPuzzleNumber();
 const history = getHistory();
+
+const stripRef = ref(null);
+const prefersReducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+onMounted(() => {
+  stripRef.value?.scrollIntoView({ behavior: prefersReducedMotion ? 'auto' : 'smooth', block: 'end' });
+});
 
 const recentDays = computed(() => {
   const days = [];
@@ -78,7 +91,7 @@ function goToArchive() {
 </script>
 
 <template>
-  <section class="archive-day-strip">
+  <section ref="stripRef" class="archive-day-strip">
     <h2 class="strip-heading">Catch up on recent days</h2>
     <div class="strip-track">
       <button
