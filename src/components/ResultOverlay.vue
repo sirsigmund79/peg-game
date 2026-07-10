@@ -15,10 +15,13 @@
     2. CENTER CARD: a mini read-only snapshot of the final board (see
        MiniBoard.vue) styled like the real board tray, with the best-
        possible and actual peg counts underneath.
-    3. FOOTER: one full-width "Share Score" button that copies a spoiler-
-       safe result line to the clipboard -- including the puzzle's date and
-       a direct link back to that exact day, so sharing an archive day
-       sends people there, not just to today's puzzle.
+    3. FOOTER: "Share Score" and "Reset", side by side. Share copies a
+       spoiler-safe result line to the clipboard -- including the puzzle's
+       date and a direct link back to that exact day, so sharing an archive
+       day sends people there, not just to today's puzzle. Reset starts the
+       same puzzle over (see composables/useGame.js's reset()); it lives
+       here rather than in components/Controls.vue once the round is over,
+       since PlayView.vue hides Controls at that point in favor of this row.
   Once the rank reveal below finishes, this emits `revealed` -- PlayView.vue
   uses that as the cue to bring in ArchiveDayStrip.vue (the archive callout)
   below the Undo/Reset controls, so that strip's own entrance never competes
@@ -206,7 +209,10 @@ async function handleShareClick() {
     </div>
 
     <footer class="result-footer">
-      <button type="button" class="share-button" @click="handleShareClick">Share Score 📋</button>
+      <div class="result-actions">
+        <button type="button" class="share-button" @click="handleShareClick">Share Score 📋</button>
+        <button type="button" class="reset-button" @click="game.reset()">Reset</button>
+      </div>
       <p v-if="shareStatusMessage" class="share-status" role="status">{{ shareStatusMessage }}</p>
     </footer>
   </div>
@@ -386,27 +392,49 @@ async function handleShareClick() {
   gap: 10px;
 }
 
-/* Matches components/Controls.vue's ".control-button.solid" (the Reset
-   button) property-for-property, so the two read as the same control
-   language -- but full-width, since this button stands alone. */
-.share-button {
-  width: 100%;
+/* Share Score and Reset sit side by side on the result screen, styled
+   differently from each other so they read as "the main thing" (share,
+   solid-filled) vs. "the other option" (reset, outlined) -- the same
+   solid/outline pairing components/Controls.vue uses for Reset/Undo during
+   play. */
+.result-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.share-button,
+.reset-button {
+  flex: 1;
   min-height: 52px;
   padding: 8px 20px;
   font-family: var(--font-ui);
   font-weight: 700;
   font-size: 1rem;
-  color: var(--color-card-bg);
-  background: var(--color-peg);
   border-width: var(--control-border-width);
   border-style: solid;
-  border-color: var(--color-peg);
   border-radius: 14px;
-  box-shadow: var(--frame-shadow-card);
   cursor: pointer;
   transition:
     background-color 0.15s ease,
-    border-color 0.15s ease;
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+/* Matches components/Controls.vue's ".control-button.solid" property-for-
+   property, so this reads as the same "primary" control language. */
+.share-button {
+  color: var(--color-card-bg);
+  background: var(--color-peg);
+  border-color: var(--color-peg);
+  box-shadow: var(--frame-shadow-card);
+}
+
+/* Matches components/Controls.vue's ".control-button.outline" -- the
+   "secondary" control language. */
+.reset-button {
+  color: var(--color-accent);
+  background: transparent;
+  border-color: var(--color-accent);
 }
 
 /* See components/Controls.vue for why this is gated on (hover: hover) --
@@ -416,9 +444,15 @@ async function handleShareClick() {
     background: var(--color-ink);
     border-color: var(--color-ink);
   }
+
+  .reset-button:hover {
+    background: var(--color-accent);
+    color: var(--color-card-bg);
+  }
 }
 
-.share-button:focus-visible {
+.share-button:focus-visible,
+.reset-button:focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: 2px;
 }

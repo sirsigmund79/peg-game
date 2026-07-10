@@ -192,6 +192,7 @@ onBeforeUnmount(() => {
     </div>
 
     <Controls
+      v-if="!game.roundOver"
       :can-undo="game.state.undoStack.length > 0"
       :round-over="game.roundOver"
       @undo="game.undo()"
