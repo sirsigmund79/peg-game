@@ -57,7 +57,7 @@ function cellDescription(row, col) {
       :key="`${row}-${col}`"
       type="button"
       class="cell"
-      :class="{ empty: cellState(row, col) === 'empty', peg: isPegCell(row, col) }"
+      :class="{ empty: cellState(row, col) === 'empty', 'has-peg': isPegCell(row, col) }"
       :disabled="editor.state.isBusy"
       :aria-label="`Grid cell row ${row + 1}, column ${col + 1}: ${cellDescription(row, col)}`"
       @click="editor.cycleCell(row, col)"
@@ -101,7 +101,7 @@ function cellDescription(row, col) {
   border-color: var(--color-board-border);
 }
 
-.cell.peg {
+.cell.has-peg {
   background: var(--color-hole);
   border-style: solid;
   border-color: var(--color-board-border);

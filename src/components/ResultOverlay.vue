@@ -5,9 +5,10 @@
   Shown once the round is over (win or not-quite-win): a Wordle/Connections-
   style result modal with exactly three parts --
     1. HEADER: the rank ("GENIUS", "Eg-no-ra-moose", ...) and the puzzle's
-       date underneath, small and muted. The rank itself "climbs" up
-       through every tier worse than the one achieved before landing on it
-       (see climbSequence/runClimb below) -- both the reveal itself and the
+       date underneath, small and muted. The rank stays hidden until the
+       page has scrolled to the modal and the "Your score" count-up below
+       has finished, then pops in once as the achieved rank (see
+       rankRevealed/runPegPulses below) -- both the reveal itself and the
        board's own round-over pulse (see Board.vue) are the "something
        just happened" cue, since this modal can otherwise be scrolled out
        of view below the board on a short screen.
@@ -26,8 +27,9 @@
 <script setup>
 import { computed, ref, onMounted, onBeforeUnmount } from 'vue';
 import { buildShareText, copyTextToClipboard } from '../services/viral.js';
-import { getRankClimbSequence } from '../logic/rules.js';
+import { getRankForOverPar, getColorAt } from '../logic/rules.js';
 import { getPegColor } from '../logic/pegColors.js';
+import { computeDisplayPositions } from '../logic/boardLayout.js';
 import { useRouter } from '../composables/useRouter.js';
 import MiniBoard from './MiniBoard.vue';
 
@@ -38,51 +40,93 @@ const props = defineProps({
 
 const { navigate } = useRouter();
 
-// --- the rank "sliding scale" reveal: climb up through every tier worse
-// than the one achieved (see logic/rules.js's getRankClimbSequence), then
-// land and stay on the real one. A 1-tier sequence (already at the
-// bottom) just shows that tier directly -- there's nothing worse to climb
-// past.
+// --- the rank reveal: stays hidden until the score count-up (below) has
+// finished, then pops in once as the achieved rank -- no more climbing
+// through worse tiers first.
 
-const climbSequence = computed(() => getRankClimbSequence(props.game.overPar));
-const climbStepIndex = ref(0);
-const settled = ref(climbSequence.value.length <= 1);
-const displayedTier = computed(() => climbSequence.value[climbStepIndex.value]);
+const achievedTier = computed(() => getRankForOverPar(props.game.overPar));
+const rankRevealed = ref(false);
 
-const CLIMB_STEP_MS = 260;
 const prefersReducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-let climbTimeoutId = null;
 
-function runClimb() {
-  const lastIndex = climbSequence.value.length - 1;
-  if (climbStepIndex.value >= lastIndex) {
-    settled.value = true;
+// --- the "Your score" reveal: walk the surviving pegs on the mini board
+// one at a time, top-left down to the bottom row, briefly pulsing each
+// hole and ticking its color's count up as it's reached -- rather than
+// just showing the final tallies outright.
+
+const pegPulseSequence = computed(() => {
+  const positions = computeDisplayPositions(props.game.geometry);
+  return positions
+    .map((position, index) => ({ index, x: position.x, y: position.y, color: getColorAt(props.game.state.masks, index) }))
+    .filter((entry) => entry.color !== -1)
+    .sort((a, b) => a.y - b.y || a.x - b.x);
+});
+
+const displayedScore = ref(props.game.par.map(() => null)); // null == not yet revealed, shown blank
+const scoreBumpKeys = ref(props.game.par.map(() => 0)); // bumped per-color to force the count-pop animation to replay
+const pulsingHoleIndex = ref(-1);
+const pulseStepIndex = ref(0);
+
+const PEG_PULSE_STEP_MS = 300;
+let pulseTimeoutId = null;
+
+function runPegPulses() {
+  const sequence = pegPulseSequence.value;
+  if (pulseStepIndex.value >= sequence.length) {
+    pulsingHoleIndex.value = -1;
+    rankRevealed.value = true;
     return;
   }
-  climbTimeoutId = setTimeout(() => {
-    climbStepIndex.value += 1;
-    runClimb();
-  }, CLIMB_STEP_MS);
+  const step = sequence[pulseStepIndex.value];
+  pulsingHoleIndex.value = step.index;
+  displayedScore.value[step.color] = (displayedScore.value[step.color] ?? 0) + 1;
+  scoreBumpKeys.value[step.color] += 1;
+  pulseTimeoutId = setTimeout(() => {
+    pulseStepIndex.value += 1;
+    runPegPulses();
+  }, PEG_PULSE_STEP_MS);
 }
 
 const modalRef = ref(null);
 
-onMounted(() => {
-  if (!prefersReducedMotion && climbSequence.value.length > 1) {
-    runClimb();
-  } else {
-    climbStepIndex.value = climbSequence.value.length - 1;
-    settled.value = true;
-  }
+// The modal can land below the board, off the bottom of a short screen --
+// bring it into view before anything animates, rather than having the
+// score count up and the rank reveal happen off-screen while the page is
+// still scrolling underneath them.
+function waitForScrollSettle() {
+  return new Promise((resolve) => {
+    if (prefersReducedMotion || !modalRef.value) {
+      modalRef.value?.scrollIntoView({ behavior: 'auto', block: 'start' });
+      resolve();
+      return;
+    }
+    let settleTimeoutId = null;
+    const finish = () => {
+      window.removeEventListener('scrollend', finish);
+      clearTimeout(settleTimeoutId);
+      resolve();
+    };
+    window.addEventListener('scrollend', finish, { once: true });
+    // Fallback for browsers without 'scrollend' (e.g. Safari): assume the
+    // smooth scroll has settled after a fixed delay.
+    settleTimeoutId = setTimeout(finish, 600);
+    modalRef.value.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+}
 
-  // The modal can land below the board, off the bottom of a short screen --
-  // bring it into view instead of leaving the player to scroll and hunt
-  // for it.
-  modalRef.value?.scrollIntoView({ behavior: prefersReducedMotion ? 'auto' : 'smooth', block: 'start' });
+onMounted(async () => {
+  await waitForScrollSettle();
+
+  if (!prefersReducedMotion) {
+    runPegPulses();
+  } else {
+    displayedScore.value = [...props.game.pegsRemaining];
+    rankRevealed.value = true;
+  }
 });
 
 onBeforeUnmount(() => {
-  if (climbTimeoutId !== null) clearTimeout(climbTimeoutId);
+  if (pulseTimeoutId !== null) clearTimeout(pulseTimeoutId);
 });
 
 /** Puzzle dates are plain "YYYY-MM-DD" local dates (see logic/daily.js) -- format without letting the browser reinterpret it in another timezone. Custom (editor-made) puzzles have no date at all. */
@@ -119,15 +163,15 @@ function goToArchive() {
 <template>
   <div ref="modalRef" class="result-modal">
     <header class="result-header">
-      <p class="rank-title" :class="{ settled }">
-        <span v-if="displayedTier.emoji" aria-hidden="true">{{ displayedTier.emoji }}</span>
-        {{ displayedTier.rank }}
+      <p class="rank-title" :class="{ revealed: rankRevealed }">
+        <span v-if="achievedTier.emoji" aria-hidden="true">{{ achievedTier.emoji }}</span>
+        {{ achievedTier.rank }}
       </p>
       <p v-if="formattedDate" class="result-date">{{ formattedDate }}</p>
     </header>
 
     <div class="result-card">
-      <MiniBoard class="mini-board" :geometry="game.geometry" :masks="game.state.masks" />
+      <MiniBoard class="mini-board" :geometry="game.geometry" :masks="game.state.masks" :pulsing-index="pulsingHoleIndex" />
 
       <div class="stat-row">
         <div class="stat">
@@ -141,7 +185,8 @@ function goToArchive() {
         <div class="stat">
           <span class="stat-value multi">
             <span v-for="(count, colorIndex) in game.pegsRemaining" :key="colorIndex" class="color-count">
-              <span class="dot" :style="{ background: getPegColor(colorIndex).hex }" aria-hidden="true"></span>{{ count }}
+              <span class="dot" :style="{ background: getPegColor(colorIndex).hex }" aria-hidden="true"></span
+              ><span class="count-number" :key="scoreBumpKeys[colorIndex]">{{ displayedScore[colorIndex] ?? '' }}</span>
             </span>
           </span>
           <span class="stat-label">Your score</span>
@@ -185,13 +230,14 @@ function goToArchive() {
   letter-spacing: 0.01em;
   text-transform: uppercase;
   color: var(--color-ink);
+  /* Stays invisible until the score count-up (see script) finishes, then
+     pops in as the achieved rank -- kept in layout (not display:none) so
+     the header doesn't jump when it appears. */
+  opacity: 0;
 }
 
-/* The moment the "climbing" rank reveal (see script) lands on the real
-   rank, a quick pop punctuates it as the final answer rather than just
-   another step in the sequence. */
-.rank-title.settled {
-  animation: rank-settle 0.4s ease-out;
+.rank-title.revealed {
+  animation: rank-reveal 0.4s ease-out forwards;
 }
 
 @keyframes modal-enter {
@@ -205,21 +251,30 @@ function goToArchive() {
   }
 }
 
-@keyframes rank-settle {
+@keyframes rank-reveal {
   0% {
-    transform: scale(1);
+    opacity: 0;
+    transform: scale(0.86);
   }
-  40% {
+  60% {
+    opacity: 1;
     transform: scale(1.14);
   }
   100% {
+    opacity: 1;
     transform: scale(1);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .result-modal,
-  .rank-title.settled {
+  .count-number {
+    animation: none;
+  }
+
+  .rank-title,
+  .rank-title.revealed {
+    opacity: 1;
     animation: none;
   }
 }
@@ -277,6 +332,27 @@ function goToArchive() {
   display: inline-flex;
   align-items: center;
   gap: 3px;
+}
+
+/* Each tick of the score reveal (see script) replaces this element (via
+   its bump-keyed :key), which replays the pop -- same beat as the rank's
+   own settle pop above. */
+.count-number {
+  display: inline-block;
+  min-width: 0.6em;
+  animation: count-pop 0.3s ease-out;
+}
+
+@keyframes count-pop {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.3);
+  }
+  100% {
+    transform: scale(1);
+  }
 }
 
 .dot {

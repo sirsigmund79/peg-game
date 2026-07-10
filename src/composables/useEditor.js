@@ -16,6 +16,7 @@
 import { reactive } from 'vue';
 import { buildCustomBoardFromDesign, buildPlayablePuzzleFromDesign } from '../logic/customBoard.js';
 import { createStartingMasks } from '../logic/rules.js';
+import { listHexCanvasCells } from '../logic/geometry.js';
 import { calculateBestOutcome, watchSolve as playWatchSolveAnimation } from '../fx/watchSolve.js';
 import { getPegColor } from '../logic/pegColors.js';
 import { useGame } from './useGame.js';
@@ -23,6 +24,10 @@ import { safeGet, safeSet } from '../logic/storage.js';
 
 const DEFAULT_ROWS = 9;
 const DEFAULT_COLS = 9;
+// Radius 3 -> 37 cells, matching the biggest built-in shape (the 37-hole
+// star) -- plenty of room to carve a triangle, hexagon, or small star out
+// of, and the canvas can always be grown further (see resizeTriangle).
+const DEFAULT_TRIANGLE_RADIUS = 3;
 const DEFAULT_COLOR_COUNT = 3;
 const MIN_COLOR_COUNT = 2;
 const MAX_COLOR_COUNT = 4;
@@ -37,6 +42,17 @@ const SAVED_PUZZLES_STORAGE_KEY = 'dot-hop:custom-puzzles';
 
 function makeBlankCellStates(rows, cols) {
   return new Array(rows * cols).fill('none');
+}
+
+function makeBlankTriangleCellStates(radius) {
+  return new Array(listHexCanvasCells(radius).length).fill('none');
+}
+
+/** none -> color 0 -> color 1 -> ... -> color (colorCount-1) -> empty -> none. */
+function nextCellState(current, colorCount) {
+  if (current === 'none') return 0;
+  if (typeof current === 'number') return current + 1 < colorCount ? current + 1 : 'empty';
+  return 'none';
 }
 
 function loadSavedPuzzles() {
@@ -54,8 +70,19 @@ function formatPerColor(perColor) {
 
 export function useEditor() {
   const state = reactive({
+    // 'grid' is a general-purpose rows x cols rectangle (8-directional
+    // jumps) -- fine for most outlines, but approximating a triangle on it
+    // needs a "doubled column" spacing trick that quietly loses the
+    // within-row jumps a real triangle has. 'triangle' instead draws on a
+    // real triangular-lattice CANVAS (see logic/geometry.js's
+    // listHexCanvasCells) that can be grown ring by ring, same idea as
+    // resizing the grid -- big enough, it can hold a triangle, a hexagon, a
+    // star (two overlapping triangles), or any other shape the lattice can
+    // represent, all with correct 6-directional connectivity.
+    shape: 'grid',
     rows: DEFAULT_ROWS,
     cols: DEFAULT_COLS,
+    triangleRadius: DEFAULT_TRIANGLE_RADIUS,
     colorCount: DEFAULT_COLOR_COUNT,
     cellStates: makeBlankCellStates(DEFAULT_ROWS, DEFAULT_COLS),
     calculatedPar: null,
@@ -65,21 +92,29 @@ export function useEditor() {
     savedPuzzles: loadSavedPuzzles(),
   });
 
-  /** Cycles one cell: none -> color 0 -> color 1 -> ... -> color (colorCount-1) -> empty -> none. */
+  /** Switches between the 'grid' and 'triangle' designers, discarding the current design (each shape keeps its own cell layout). */
+  function setShapeMode(shape) {
+    if (state.isBusy || shape === state.shape) return;
+    state.shape = shape;
+    state.cellStates = shape === 'triangle' ? makeBlankTriangleCellStates(state.triangleRadius) : makeBlankCellStates(state.rows, state.cols);
+    state.calculatedPar = null;
+    state.statusMessage = '';
+  }
+
+  /** Cycles one cell of the 'grid' designer. */
   function cycleCell(row, col) {
     if (state.isBusy) return; // don't let editing happen mid-animation
     const index = row * state.cols + col;
-    const current = state.cellStates[index];
-    let next;
-    if (current === 'none') {
-      next = 0;
-    } else if (typeof current === 'number') {
-      next = current + 1 < state.colorCount ? current + 1 : 'empty';
-    } else {
-      next = 'none';
-    }
-    state.cellStates[index] = next;
+    state.cellStates[index] = nextCellState(state.cellStates[index], state.colorCount);
     state.calculatedPar = null; // the board changed, so any old answer is stale
+    state.statusMessage = '';
+  }
+
+  /** Cycles one cell of the 'triangle' designer's canvas, by its flat index into logic/geometry.js's listHexCanvasCells() order. */
+  function cycleTriangleCell(index) {
+    if (state.isBusy) return;
+    state.cellStates[index] = nextCellState(state.cellStates[index], state.colorCount);
+    state.calculatedPar = null;
     state.statusMessage = '';
   }
 
@@ -95,7 +130,7 @@ export function useEditor() {
     state.statusMessage = '';
   }
 
-  /** Resizes the grid, keeping whatever cell states still fit in the new size. */
+  /** Resizes the 'grid' designer, keeping whatever cell states still fit in the new size. */
   function resizeGrid(newRows, newCols) {
     const nextCellStates = makeBlankCellStates(newRows, newCols);
     for (let row = 0; row < Math.min(newRows, state.rows); row++) {
@@ -109,16 +144,40 @@ export function useEditor() {
     state.calculatedPar = null;
   }
 
-  /** Clears every cell back to 'none'. */
+  /**
+   * Grows or shrinks the 'triangle' designer's canvas radius, keeping
+   * whatever cell states still fit. Unlike resizeGrid()'s simple prefix
+   * copy, a bigger hex canvas isn't just the old one plus more cells
+   * appended at the end -- listHexCanvasCells() re-enumerates the whole
+   * canvas in (x, y) order, so cells that exist in both sizes can land at
+   * different flat indexes. Matching by (x, y) coordinate instead of index
+   * keeps every existing cell's actual position (and its content) fixed as
+   * the canvas grows or shrinks around it.
+   */
+  function resizeTriangle(newRadius) {
+    const oldCells = listHexCanvasCells(state.triangleRadius);
+    const oldStateByCoordinate = new Map(oldCells.map((cell, index) => [`${cell.x},${cell.y}`, state.cellStates[index]]));
+
+    const nextCellStates = listHexCanvasCells(newRadius).map((cell) => oldStateByCoordinate.get(`${cell.x},${cell.y}`) ?? 'none');
+
+    state.triangleRadius = newRadius;
+    state.cellStates = nextCellStates;
+    state.calculatedPar = null;
+  }
+
+  /** Clears every cell of the current designer back to 'none'. */
   function clearGrid() {
-    state.cellStates = makeBlankCellStates(state.rows, state.cols);
+    state.cellStates = state.shape === 'triangle' ? makeBlankTriangleCellStates(state.triangleRadius) : makeBlankCellStates(state.rows, state.cols);
     state.calculatedPar = null;
     state.statusMessage = '';
   }
 
   /** Builds the current design into a real, solvable board. */
   function buildCurrentBoard() {
-    return buildCustomBoardFromDesign({ rows: state.rows, cols: state.cols, cellStates: state.cellStates });
+    if (state.shape === 'triangle') {
+      return buildCustomBoardFromDesign({ shape: 'triangle', radius: state.triangleRadius, cellStates: state.cellStates });
+    }
+    return buildCustomBoardFromDesign({ shape: 'grid', rows: state.rows, cols: state.cols, cellStates: state.cellStates });
   }
 
   /** Runs the solver and reports the best possible outcome, without playing anything. */
@@ -204,8 +263,8 @@ export function useEditor() {
     const savedPuzzle = {
       id: `custom-${Date.now()}`,
       name: name && name.trim() ? name.trim() : 'Untitled design',
-      rows: state.rows,
-      cols: state.cols,
+      shape: state.shape,
+      ...(state.shape === 'triangle' ? { radius: state.triangleRadius } : { rows: state.rows, cols: state.cols }),
       colorCount: state.colorCount,
       cellStates: [...state.cellStates],
       par: state.calculatedPar,
@@ -224,10 +283,15 @@ export function useEditor() {
     persistSavedPuzzles(state.savedPuzzles);
   }
 
-  /** Loads a saved design back into the grid for further editing. */
+  /** Loads a saved design back into the editor, switching to whichever designer ('grid' or 'triangle') it was drawn with. */
   function loadSavedDesignIntoEditor(savedPuzzle) {
-    state.rows = savedPuzzle.rows;
-    state.cols = savedPuzzle.cols;
+    state.shape = savedPuzzle.shape || 'grid';
+    if (state.shape === 'triangle') {
+      state.triangleRadius = savedPuzzle.radius;
+    } else {
+      state.rows = savedPuzzle.rows;
+      state.cols = savedPuzzle.cols;
+    }
     state.colorCount = savedPuzzle.colorCount;
     state.cellStates = [...savedPuzzle.cellStates];
     state.calculatedPar = savedPuzzle.par;
@@ -235,15 +299,20 @@ export function useEditor() {
   }
 
   /**
-   * Loads a saved design's shape back into the grid, but resets every
+   * Loads a saved design's shape back into the editor, but resets every
    * 'empty' cell back to color 0 first -- lets you reuse the same board
    * outline with a different starting hole (or set of holes) without
    * touching the original saved puzzle. Nothing is saved until you click
    * Save again, which creates a brand-new entry.
    */
   function duplicateSavedDesign(savedPuzzle) {
-    state.rows = savedPuzzle.rows;
-    state.cols = savedPuzzle.cols;
+    state.shape = savedPuzzle.shape || 'grid';
+    if (state.shape === 'triangle') {
+      state.triangleRadius = savedPuzzle.radius;
+    } else {
+      state.rows = savedPuzzle.rows;
+      state.cols = savedPuzzle.cols;
+    }
     state.colorCount = savedPuzzle.colorCount;
     state.cellStates = savedPuzzle.cellStates.map((cellState) => (cellState === 'empty' ? 0 : cellState));
     state.calculatedPar = null;
@@ -264,9 +333,11 @@ export function useEditor() {
    * snippet into the source and redeploying.
    */
   async function copyScheduleSnippet(savedPuzzle) {
+    const shape = savedPuzzle.shape || 'grid';
+    const sizeFields = shape === 'triangle' ? `radius: ${savedPuzzle.radius}, ` : `rows: ${savedPuzzle.rows}, cols: ${savedPuzzle.cols}, `;
     const snippet =
-      `  "YYYY-MM-DD": { boardName: ${JSON.stringify(savedPuzzle.name)}, rows: ${savedPuzzle.rows}, ` +
-      `cols: ${savedPuzzle.cols}, cellStates: ${JSON.stringify(savedPuzzle.cellStates)}, ` +
+      `  "YYYY-MM-DD": { boardName: ${JSON.stringify(savedPuzzle.name)}, shape: ${JSON.stringify(shape)}, ` +
+      `${sizeFields}cellStates: ${JSON.stringify(savedPuzzle.cellStates)}, ` +
       `colorCount: ${savedPuzzle.colorCount}, par: ${JSON.stringify(savedPuzzle.par)} },`;
 
     try {
@@ -279,9 +350,12 @@ export function useEditor() {
 
   return reactive({
     state,
+    setShapeMode,
     cycleCell,
+    cycleTriangleCell,
     setColorCount,
     resizeGrid,
+    resizeTriangle,
     clearGrid,
     calculateMax,
     watchSolve,

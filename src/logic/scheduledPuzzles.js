@@ -31,4 +31,8 @@
  */
 export const SCHEDULED_PUZZLES = {
   // "2026-08-01": { boardName: "Launch Special", rows: 9, cols: 9, cellStates: [...], colorCount: 3, par: [1, 1, 1] },
+  "2026-07-11": { boardName: "Tricky!", rows: 5, cols: 5, cellStates: [0,0,1,"none","none",0,0,1,1,"none","empty",0,1,"empty","none",1,1,"empty",0,0,1,1,"none",0,0], colorCount: 2, par: [1,1] },
+  "2026-07-15": { boardName: "Green F", rows: 5, cols: 5, cellStates: [2,2,2,"none","none",2,2,0,0,"empty",2,0,0,0,0,2,1,1,1,1,"empty","none",1,1,"none"], colorCount: 3, par: [1,1,2] },
+  "2026-07-21": { boardName: "Tricky 2", rows: 5, cols: 5, cellStates: [0,0,1,0,0,0,0,1,1,"empty",0,0,"empty",0,"none",1,1,0,0,0,1,1,"none",0,0], colorCount: 2, par: [1,1] },
+  "2026-07-12": { boardName: "deceptively simple", rows: 5, cols: 5, cellStates: ["none",0,0,1,"empty","none",0,"empty",1,1,"empty",0,0,"empty",1,"none",0,"empty",1,1,"none","empty","none","empty","empty"], colorCount: 2, par: [1,1] },
 };

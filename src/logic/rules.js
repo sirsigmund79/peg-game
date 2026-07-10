@@ -176,9 +176,7 @@ export function countPegsRemaining(masks) {
  * different color counts and par totals (today's "left exactly 1 peg" was
  * always `overPar === 0` under the old single-color rule; these thresholds
  * carry that over unchanged). Kept as one ordered list (rather than a
- * chain of if-statements) so ResultOverlay.vue's "sliding scale" reveal
- * can animate up through every tier the player passed on the way to the
- * one they actually landed on -- see getRankClimbSequence() below.
+ * chain of if-statements) for easy scanning/testing.
  */
 export const RANK_TIERS = [
   { overPar: null, rank: 'Eg-no-ra-moose', emoji: '' },
@@ -199,22 +197,4 @@ export const RANK_TIERS = [
 export function getRankForOverPar(overPar) {
   const tier = RANK_TIERS.find((candidate) => candidate.overPar === overPar) ?? RANK_TIERS[0];
   return { rank: tier.rank, emoji: tier.emoji };
-}
-
-/**
- * Every tier from the worst (bottom of RANK_TIERS) up through whichever
- * one the player actually reached, in the order a "sliding scale" reveal
- * should visit them -- always ending on the achieved tier, whether that's
- * a 1-step reveal (already at the bottom) or a full 4-step climb (GENIUS).
- *
- * @param {number} overPar
- * @returns {{rank: string, emoji: string}[]}
- */
-export function getRankClimbSequence(overPar) {
-  const achievedIndex = RANK_TIERS.findIndex((candidate) => candidate.overPar === overPar);
-  const index = achievedIndex === -1 ? 0 : achievedIndex;
-  // RANK_TIERS is already ordered worst -> best, so slicing from the start
-  // up through the achieved tier already reads worst -> achieved -- no
-  // reversal needed.
-  return RANK_TIERS.slice(0, index + 1);
 }

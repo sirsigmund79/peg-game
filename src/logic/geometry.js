@@ -148,6 +148,19 @@ const TRIANGLE_DIRECTIONS = [
  * @returns {ReturnType<typeof buildGeometry>}
  */
 export function makeTriangleGeometry(rowCount) {
+  return makeCustomTriangularGeometry(listTriangleCells(rowCount));
+}
+
+/**
+ * Every (col, row) coordinate a full `rowCount`-row triangle occupies, in
+ * the same row-major order used everywhere a "triangular design" is stored
+ * as a flat array (see logic/customBoard.js) -- row 0 has 1 cell, row 1 has
+ * 2, ..., row (rowCount - 1) has rowCount.
+ *
+ * @param {number} rowCount
+ * @returns {{x: number, y: number}[]}
+ */
+export function listTriangleCells(rowCount) {
   const cellList = [];
   for (let row = 0; row < rowCount; row++) {
     for (let col = 0; col <= row; col++) {
@@ -156,6 +169,24 @@ export function makeTriangleGeometry(rowCount) {
       cellList.push({ x: col, y: row });
     }
   }
+  return cellList;
+}
+
+/**
+ * Builds triangular-lattice geometry (same 6-direction connectivity as
+ * makeTriangleGeometry) from an arbitrary SUBSET of a triangle's cells --
+ * used by the level editor's triangle draw mode, where a design can carve
+ * some of those cells out (mark them 'none') instead of always using the
+ * full triangle. Cutting a cell out of a real triangular lattice like this
+ * (rather than approximating a triangle shape on a square grid) is what
+ * keeps every remaining cell's jump directions correct, including the
+ * within-row jumps a square-grid approximation loses -- see
+ * logic/customBoard.js.
+ *
+ * @param {{x:number, y:number}[]} cellList
+ * @returns {ReturnType<typeof buildGeometry>}
+ */
+export function makeCustomTriangularGeometry(cellList) {
   return buildGeometry(cellList, TRIANGLE_DIRECTIONS, 'triangular-lattice');
 }
 
@@ -178,14 +209,19 @@ function toCubeCoordinate(x, y) {
 }
 
 /**
- * Builds a hexagon-shaped board on the triangular lattice: every point
- * within `radius` steps of the center in every one of the 3 cube-coordinate
- * axes. Radius 2 gives the classic 19-hole hex peg board.
+ * Every (x, y) coordinate within `radius` steps of the center, in every one
+ * of the 3 cube-coordinate axes -- a hexagon-shaped region of the
+ * triangular lattice. Radius 2 gives the classic 19-hole hex peg board.
+ * This is also the level editor's "triangle" designer's CANVAS (see
+ * composables/useEditor.js): a symmetric, growable region of real
+ * lattice points a design can carve any shape out of -- a triangle, this
+ * hexagon itself, a star (see makeStarGeometry below), or anything else --
+ * rather than being limited to one fixed silhouette.
  *
  * @param {number} radius
- * @returns {ReturnType<typeof buildGeometry>}
+ * @returns {{x:number, y:number}[]}
  */
-export function makeHexagonGeometry(radius) {
+export function listHexCanvasCells(radius) {
   const cellList = [];
   for (let x = -radius * 2; x <= radius * 2; x++) {
     for (let y = -radius * 2; y <= radius * 2; y++) {
@@ -195,7 +231,18 @@ export function makeHexagonGeometry(radius) {
       }
     }
   }
-  return buildGeometry(cellList, TRIANGLE_DIRECTIONS, 'triangular-lattice');
+  return cellList;
+}
+
+/**
+ * Builds a hexagon-shaped board on the triangular lattice -- see
+ * listHexCanvasCells() above for the shape itself.
+ *
+ * @param {number} radius
+ * @returns {ReturnType<typeof buildGeometry>}
+ */
+export function makeHexagonGeometry(radius) {
+  return makeCustomTriangularGeometry(listHexCanvasCells(radius));
 }
 
 /**

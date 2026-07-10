@@ -11,16 +11,34 @@
 // wrapper around this.
 // ============================================================================
 
-import { makeGridGeometry } from './geometry.js';
+import { makeGridGeometry, makeCustomTriangularGeometry, listHexCanvasCells } from './geometry.js';
 import { getEmptyHolesFromColors } from './rules.js';
 
 /**
- * A design is a flat `rows` x `cols` grid where each cell is one of:
+ * A design is a flat grid of cells where each cell is one of:
  *   'none'  -- not part of the board at all
  *   'empty' -- part of the board, starts as an empty hole
  *   a number (0..colorCount-1) -- part of the board, starts with a peg of that color
  *
- * @typedef {{rows: number, cols: number, cellStates: (string|number)[]}} BoardDesign
+ * `shape` picks how that flat array is laid out and connected:
+ *   'grid'     (default, omitted `shape` means this) -- a `rows` x `cols`
+ *              rectangle, 8-directional (straight + diagonal) jumps. This is
+ *              the general-purpose designer -- fine for approximating most
+ *              outlines, but a hand-drawn triangle on it needs a "doubled
+ *              column" spacing trick to look evenly staggered, which quietly
+ *              drops the within-row jumps a real triangle has (see
+ *              buildCustomBoardFromDesign below).
+ *   'triangle' -- a real triangular-lattice board, on a hexagon-shaped
+ *              CANVAS of the given `radius` (see logic/geometry.js's
+ *              listHexCanvasCells() -- radius 0 is a single cell, each step
+ *              out adds a ring of 6*radius more), cellStates in that same
+ *              order, 6-directional jumps. Individual cells can still be
+ *              'none' to carve ANY shape out of that canvas -- a triangle,
+ *              the hexagon itself, a star (two overlapping triangles), or
+ *              anything else the lattice can represent -- only the canvas
+ *              SIZE is fixed by `radius`, not which cells are used.
+ *
+ * @typedef {{shape?: 'grid'|'triangle', rows?: number, cols?: number, radius?: number, cellStates: (string|number)[]}} BoardDesign
  */
 
 /**
@@ -29,27 +47,40 @@ import { getEmptyHolesFromColors } from './rules.js';
  * @param {BoardDesign} design
  * @returns {{geometry: object, holeColors: number[], activeGridIndexes: number[]}}
  *   `activeGridIndexes` maps each geometry cell index back to its position
- *   in the original `cellStates` array (grid index = row * cols + col) --
- *   used to draw solver results back onto the editor grid.
+ *   in the original `cellStates` array -- used to draw solver results back
+ *   onto the editor grid.
  */
 export function buildCustomBoardFromDesign(design) {
+  const cellCoordinatesByIndex = design.shape === 'triangle' ? listHexCanvasCells(design.radius) : null;
+
   const cellList = [];
   const holeColors = [];
   const activeGridIndexes = [];
 
-  for (let row = 0; row < design.rows; row++) {
-    for (let col = 0; col < design.cols; col++) {
-      const gridIndex = row * design.cols + col;
-      const cellState = design.cellStates[gridIndex];
-      if (cellState === 'none') continue;
+  if (design.shape === 'triangle') {
+    cellCoordinatesByIndex.forEach((coordinate, index) => {
+      const cellState = design.cellStates[index];
+      if (cellState === 'none') return;
 
-      cellList.push({ x: col, y: row });
-      activeGridIndexes.push(gridIndex);
+      cellList.push(coordinate);
+      activeGridIndexes.push(index);
       holeColors.push(cellState === 'empty' ? -1 : cellState);
+    });
+  } else {
+    for (let row = 0; row < design.rows; row++) {
+      for (let col = 0; col < design.cols; col++) {
+        const gridIndex = row * design.cols + col;
+        const cellState = design.cellStates[gridIndex];
+        if (cellState === 'none') continue;
+
+        cellList.push({ x: col, y: row });
+        activeGridIndexes.push(gridIndex);
+        holeColors.push(cellState === 'empty' ? -1 : cellState);
+      }
     }
   }
 
-  const geometry = makeGridGeometry(cellList);
+  const geometry = design.shape === 'triangle' ? makeCustomTriangularGeometry(cellList) : makeGridGeometry(cellList);
   return { geometry, holeColors, activeGridIndexes };
 }
 
@@ -57,7 +88,7 @@ export function buildCustomBoardFromDesign(design) {
  * Builds a full puzzle object (the same shape logic/daily.js produces) from
  * a saved custom design, so it can be handed straight to useGame().
  *
- * @param {{name: string, rows: number, cols: number, cellStates: (string|number)[], colorCount: number, par: number[]}} savedPuzzle
+ * @param {{name: string} & BoardDesign & {colorCount: number, par: number[]}} savedPuzzle
  * @returns {object}
  */
 export function buildPlayablePuzzleFromDesign(savedPuzzle) {
@@ -83,7 +114,7 @@ export function buildPlayablePuzzleFromDesign(savedPuzzle) {
  * fills in the real puzzleNumber/date, since a scheduled puzzle *is* that
  * day's actual daily puzzle, not a one-off editor preview.
  *
- * @param {{boardName: string, rows: number, cols: number, cellStates: (string|number)[], colorCount: number, par: number[]}} scheduledDesign
+ * @param {{boardName: string} & BoardDesign & {colorCount: number, par: number[]}} scheduledDesign
  * @param {number} puzzleNumber
  * @param {string} date - ISO date (YYYY-MM-DD)
  * @returns {object}

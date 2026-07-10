@@ -14,16 +14,27 @@ import { ref } from 'vue';
 import { useEditor } from '../composables/useEditor.js';
 import { getPegColor } from '../logic/pegColors.js';
 import EditorGrid from './EditorGrid.vue';
+import EditorTriangleGrid from './EditorTriangleGrid.vue';
 import Board from './Board.vue';
 
 const emit = defineEmits(['play-puzzle']);
 
 const editor = useEditor();
 const COLOR_COUNT_OPTIONS = [2, 3, 4];
+const SHAPE_MODE_OPTIONS = [
+  { value: 'grid', label: 'Grid' },
+  { value: 'triangle', label: 'Triangle' },
+];
 
 const rowsInput = ref(String(editor.state.rows));
 const colsInput = ref(String(editor.state.cols));
+const triangleRadiusInput = ref(String(editor.state.triangleRadius));
 const saveNameInput = ref('');
+
+// Radius is capped lower than the grid's rows/cols: a hex canvas grows by a
+// whole RING (6*radius cells) per step, so it gets huge fast -- radius 10
+// is already 331 cells, comfortably past what's worth hand-drawing.
+const MAX_TRIANGLE_RADIUS = 10;
 
 function applyResize() {
   const newRows = Math.min(20, Math.max(1, Number.parseInt(rowsInput.value, 10) || editor.state.rows));
@@ -31,6 +42,22 @@ function applyResize() {
   rowsInput.value = String(newRows);
   colsInput.value = String(newCols);
   editor.resizeGrid(newRows, newCols);
+}
+
+function applyTriangleResize() {
+  const newRadius = Math.min(
+    MAX_TRIANGLE_RADIUS,
+    Math.max(1, Number.parseInt(triangleRadiusInput.value, 10) || editor.state.triangleRadius)
+  );
+  triangleRadiusInput.value = String(newRadius);
+  editor.resizeTriangle(newRadius);
+}
+
+function handleShapeModeChange(shape) {
+  editor.setShapeMode(shape);
+  rowsInput.value = String(editor.state.rows);
+  colsInput.value = String(editor.state.cols);
+  triangleRadiusInput.value = String(editor.state.triangleRadius);
 }
 
 function handleSave() {
@@ -56,7 +83,23 @@ function playSavedPuzzle(savedPuzzle) {
     </div>
 
     <template v-else>
-      <EditorGrid :editor="editor" />
+      <div class="toolbar-row">
+        <span class="resize-field color-count-label">Shape</span>
+        <button
+          v-for="option in SHAPE_MODE_OPTIONS"
+          :key="option.value"
+          type="button"
+          class="toolbar-button"
+          :class="{ primary: editor.state.shape === option.value }"
+          :disabled="editor.state.isBusy"
+          @click="handleShapeModeChange(option.value)"
+        >
+          {{ option.label }}
+        </button>
+      </div>
+
+      <EditorGrid v-if="editor.state.shape === 'grid'" :editor="editor" />
+      <EditorTriangleGrid v-else :editor="editor" />
 
       <div class="toolbar-row">
         <span class="resize-field color-count-label">Colors</span>
@@ -73,7 +116,7 @@ function playSavedPuzzle(savedPuzzle) {
         </button>
       </div>
 
-      <div class="toolbar-row">
+      <div v-if="editor.state.shape === 'grid'" class="toolbar-row">
         <label class="resize-field">
           Rows
           <input v-model="rowsInput" type="number" min="1" max="20" @change="applyResize" />
@@ -81,6 +124,13 @@ function playSavedPuzzle(savedPuzzle) {
         <label class="resize-field">
           Cols
           <input v-model="colsInput" type="number" min="1" max="20" @change="applyResize" />
+        </label>
+        <button type="button" class="toolbar-button" @click="editor.clearGrid()">Clear</button>
+      </div>
+      <div v-else class="toolbar-row">
+        <label class="resize-field">
+          Size
+          <input v-model="triangleRadiusInput" type="number" min="1" :max="MAX_TRIANGLE_RADIUS" @change="applyTriangleResize" />
         </label>
         <button type="button" class="toolbar-button" @click="editor.clearGrid()">Clear</button>
       </div>
@@ -120,7 +170,7 @@ function playSavedPuzzle(savedPuzzle) {
               <span v-for="(count, colorIndex) in saved.par" :key="colorIndex" :style="{ color: getPegColor(colorIndex).hex }">
                 {{ getPegColor(colorIndex).emoji }}{{ count }}
               </span>
-              &middot; {{ saved.rows }}x{{ saved.cols }}
+              &middot; {{ saved.shape === 'triangle' ? `triangle, size ${saved.radius}` : `${saved.rows}x${saved.cols}` }}
             </span>
           </div>
           <div class="puzzle-actions">
