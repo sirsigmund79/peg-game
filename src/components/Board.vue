@@ -310,38 +310,13 @@ function isDissolving(index) {
   }
 }
 
-/* The rest of the end-of-round flourish: every open hole gets a dark
-   gradient wash, and every remaining peg gets a highlight pulse, staggered
-   via --ripple-delay (set per-hole above) so the two read as one wave
-   radiating outward from the board's center. Brief and self-reversing --
-   neither leaves a lasting style change once it finishes. */
-.board.round-over .hole:not(.filled)::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  opacity: 0;
-  pointer-events: none;
-  animation: hole-ripple 0.5s ease-out;
-  animation-delay: var(--ripple-delay, 0ms);
-}
-
+/* The rest of the end-of-round flourish: every remaining peg gets a
+   highlight pulse, staggered via --ripple-delay (set per-hole above) so it
+   reads as one wave radiating outward from the board's center. Brief and
+   self-reversing -- it leaves no lasting style change once it finishes. */
 .board.round-over .hole.filled .peg:not(.dissolving) {
   animation: peg-pulse 0.5s ease-out;
   animation-delay: var(--ripple-delay, 0ms);
-}
-
-@keyframes hole-ripple {
-  0% {
-    opacity: 0;
-    background: radial-gradient(circle, rgba(0, 0, 0, 0.35) 0%, rgba(0, 0, 0, 0) 72%);
-  }
-  35% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0;
-  }
 }
 
 @keyframes peg-pulse {
@@ -360,7 +335,6 @@ function isDissolving(index) {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .board.round-over .hole:not(.filled)::before,
   .board.round-over .hole.filled .peg:not(.dissolving) {
     animation: none;
   }
