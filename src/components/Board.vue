@@ -59,6 +59,19 @@ const props = defineProps({
 const holePositions = computed(() => computeDisplayPositions(props.game.geometry));
 const holeDiameterPercent = computed(() => computeHoleDiameterPercent(props.game.geometry, holePositions.value));
 
+// Staggers the end-of-round ripple (see the `.board.round-over .hole`
+// rules below) so it visibly radiates outward from the board's center
+// rather than firing on every hole at once -- distance is computed in the
+// same 0-100 board-percent space `computeDisplayPositions()` already
+// places holes in, so no extra geometry is needed.
+const RIPPLE_STAGGER_SPAN_MS = 220;
+const boardCenterDistances = computed(() => holePositions.value.map((position) => Math.hypot(position.x - 50, position.y - 50)));
+const maxRippleDistance = computed(() => Math.max(1, ...boardCenterDistances.value)); // guards a single-hole board
+
+function rippleDelayMs(index) {
+  return Math.round((boardCenterDistances.value[index] / maxRippleDistance.value) * RIPPLE_STAGGER_SPAN_MS);
+}
+
 const friendEmojiByIndex = computed(() => new Map(props.friendHoles.map((friend) => [friend.index, friend.emoji])));
 
 /** @returns {string|undefined} the hidden friend's emoji for hole `index`, if any. */
@@ -197,7 +210,7 @@ function isDissolving(index) {
         selected: isSelected(index),
         target: isValidTarget(index),
       }"
-      :style="{ left: position.left, top: position.top }"
+      :style="{ left: position.left, top: position.top, '--ripple-delay': rippleDelayMs(index) + 'ms' }"
       :aria-label="holeAriaLabel(index)"
       :aria-pressed="isSelected(index)"
       @click="game.selectHole(index)"
@@ -293,6 +306,62 @@ function isDissolving(index) {
 @media (prefers-reduced-motion: reduce) {
   .board.round-over,
   .board.round-over::after {
+    animation: none;
+  }
+}
+
+/* The rest of the end-of-round flourish: every open hole gets a dark
+   gradient wash, and every remaining peg gets a highlight pulse, staggered
+   via --ripple-delay (set per-hole above) so the two read as one wave
+   radiating outward from the board's center. Brief and self-reversing --
+   neither leaves a lasting style change once it finishes. */
+.board.round-over .hole:not(.filled)::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  opacity: 0;
+  pointer-events: none;
+  animation: hole-ripple 0.5s ease-out;
+  animation-delay: var(--ripple-delay, 0ms);
+}
+
+.board.round-over .hole.filled .peg:not(.dissolving) {
+  animation: peg-pulse 0.5s ease-out;
+  animation-delay: var(--ripple-delay, 0ms);
+}
+
+@keyframes hole-ripple {
+  0% {
+    opacity: 0;
+    background: radial-gradient(circle, rgba(0, 0, 0, 0.35) 0%, rgba(0, 0, 0, 0) 72%);
+  }
+  35% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes peg-pulse {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 var(--color-accent);
+  }
+  40% {
+    transform: scale(1.12);
+    box-shadow: 0 0 8px 3px var(--color-accent);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 var(--color-accent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .board.round-over .hole:not(.filled)::before,
+  .board.round-over .hole.filled .peg:not(.dissolving) {
     animation: none;
   }
 }
