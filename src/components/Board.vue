@@ -314,12 +314,27 @@ function isDissolving(index) {
   /* A tiny flat recess shadow -- just enough for the empty hole to read
      as a physical slot, not a decorative dashed-outline ring. */
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.12);
+  /* This button's hit-box is a square, even though border-radius makes it
+     *look* circular -- the browser's own tap/focus affordances don't know
+     that. Left alone, tapping a hole leaves a square color haze (iOS
+     Safari's tap-highlight) and/or a square focus ring, both squared off to
+     the true button box rather than clipped to the visible circle. Kill
+     both here and rebuild focus-visible below using box-shadow, which (like
+     the recess shadow above) always follows border-radius correctly. */
+  -webkit-tap-highlight-color: transparent;
+  outline: none;
 }
 
 .hole.target {
   box-shadow:
     inset 0 1px 2px rgba(0, 0, 0, 0.12),
     0 0 0 2px var(--color-accent);
+}
+
+.hole:focus-visible {
+  box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, 0.12),
+    0 0 0 3px var(--color-accent);
 }
 
 .peg {
