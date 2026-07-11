@@ -26,6 +26,7 @@ import {
 import { vibrateJump, vibrateRoundOver } from '../fx/haptics.js';
 import { playSound, playRoundOverChime, soundState } from '../fx/sound.js';
 import { recordResult, getResultForPuzzle } from '../logic/history.js';
+import { recordBestIfBetter } from '../logic/bestResults.js';
 import { EVENTS, track, syncPlayerStatsToPostHog } from '../services/analytics.js';
 
 function sum(numbers) {
@@ -210,6 +211,7 @@ export function useGame(puzzle, options = {}) {
       // them -- there's nothing worth recording.
       if (puzzle.puzzleNumber !== null) {
         recordResult(puzzle.puzzleNumber, { pegsRemaining: finalPegsRemaining, overPar: overParAtEnd, won });
+        recordBestIfBetter(puzzle.puzzleNumber, { pegsRemaining: finalPegsRemaining, overPar: overParAtEnd, won, masks: state.masks });
         syncPlayerStatsToPostHog();
       }
       track(EVENTS.PUZZLE_COMPLETED, {

@@ -32,7 +32,7 @@ const MOOSE_THEME = {
     '--color-hole': '#ffffff',
     '--color-hole-border': 'rgba(36, 27, 20, 0.35)',
     // Still used as a brand accent (Controls.vue's Reset button,
-    // ResultOverlay.vue's Share button) -- NOT for peg rendering, which
+    // ResultFooter.vue's Share button) -- NOT for peg rendering, which
     // now comes from the fixed palette in logic/pegColors.js instead.
     '--color-peg': '#1c8c52',
     '--color-accent': '#145c34',

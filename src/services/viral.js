@@ -9,7 +9,7 @@
 // loads that specific day regardless of what "today" is when it's opened),
 // so sharing an archive day sends people to that day, not just today's.
 //
-// No Vue code lives here -- ResultOverlay.vue calls these plain functions
+// No Vue code lives here -- ResultFooter.vue calls these plain functions
 // and just displays whatever comes back.
 // ============================================================================
 
@@ -22,27 +22,31 @@ export const SITE_URL = 'https://dot-hop.pages.dev/';
  * Builds the short, spoiler-safe text people post when they share a result
  * -- the puzzle's date, one row per peg color with that color's circle
  * emoji repeated once per surviving peg (in color order, colors with none
- * left omitted), and a link straight to that day's puzzle.
+ * left omitted), the rank that result earned, and a link straight to that
+ * day's puzzle.
  *
  * @param {object} params
  * @param {number[]} params.pegsRemaining - final per-color peg counts, color-index order
  * @param {number|null} [params.puzzleNumber] - the day's puzzle number (see logic/daily.js); omitted/null for a one-off custom design, which has no day to link to
- * @param {string|null} [params.formattedDate] - the puzzle's date, already formatted for display (see ResultOverlay.vue's formattedDate); omitted/null for a custom design
+ * @param {string|null} [params.formattedDate] - the puzzle's date, already formatted for display (see PlayView.vue's formattedDate); omitted/null for a custom design
+ * @param {string|null} [params.rank] - the rank copy earned by this result (see logic/rules.js's getRankForOverPar); omitted/null to leave it out
+ * @param {string|null} [params.emoji] - that rank's emoji, if it has one
  * @returns {string}
  */
-export function buildShareText({ pegsRemaining, puzzleNumber = null, formattedDate = null }) {
+export function buildShareText({ pegsRemaining, puzzleNumber = null, formattedDate = null, rank = null, emoji = null }) {
   const emojiLines = pegsRemaining
     .map((count, colorIndex) => getPegColor(colorIndex).emoji.repeat(count))
     .filter((row) => row.length > 0)
     .join('\n');
   const dateLine = formattedDate ? `Dot Hop — ${formattedDate}\n` : '';
+  const rankLine = rank ? `${emoji ? emoji + ' ' : ''}${rank}\n` : '';
   // The `?ref=share` marker doesn't reveal anything spoiler-y -- it's the
   // only way to tell a session arriving from a shared result apart from any
   // other visit, since PostHog auto-captures $current_url/$referrer but has
   // no other way to know a link came from this button. See the Virality
   // dashboard in docs/ANALYTICS.md.
   const link = puzzleNumber === null ? `${SITE_URL}?ref=share` : `${SITE_URL}?ref=share#/play/${puzzleNumber}`;
-  return `${dateLine}${emojiLines}\n${link}`;
+  return `${dateLine}${emojiLines}\n${rankLine}${link}`;
 }
 
 /**
@@ -63,4 +67,32 @@ export async function copyTextToClipboard(text) {
   } catch (error) {
     return false;
   }
+}
+
+/**
+ * Shares a result: always copies the text to the clipboard first (so it's
+ * there to paste even if the device has no share sheet, or the player
+ * cancels it), then -- on a device that supports it (mainly mobile) --
+ * opens the OS's native share sheet with that same text, so it's a couple
+ * taps to send straight to a specific contact or messaging app instead of
+ * pasting it in by hand.
+ *
+ * @param {string} text
+ * @returns {Promise<{copied: boolean, shared: boolean}>}
+ */
+export async function shareResult(text) {
+  const copied = await copyTextToClipboard(text);
+  let shared = false;
+  if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+    try {
+      await navigator.share({ text });
+      shared = true;
+    } catch (error) {
+      // The player cancelled the share sheet, or the platform rejected the
+      // request outright -- either way the clipboard copy above already
+      // succeeded (or didn't) independently, so there's nothing left to
+      // recover here.
+    }
+  }
+  return { copied, shared };
 }
