@@ -127,11 +127,14 @@ src/
     useEditor.js                    Level editor state: the grid, Calculate Max, Watch Solve, saved designs
 
   components/
-    Board.vue                       Draws holes + pegs, positions them, handles taps
-    MiniBoard.vue                   Small read-only board snapshot used in the result modal
+    Board.vue                       Draws holes + pegs, positions them, handles taps -- also becomes the result screen's mini board (see `compact`/`masksOverride` props)
+    MiniBoard.vue                   Small read-only board snapshot used by StoryMapView.vue's chapter map
     StatBar.vue                     Pegs left / moves / target chips above the board
     Controls.vue                    Undo + Reset buttons
-    ResultOverlay.vue               Result modal: rank + date, a mini board + best/actual score, share + archive buttons
+    ResultHeader.vue                Result screen header: rank (sized by tier) + shy-of-GENIUS callout + date
+    ResultToggle.vue                Result screen's "This game" / "Best" segmented control
+    ResultStatRow.vue               Result screen's best-possible / actual score row
+    ResultFooter.vue                Result screen's share + reset buttons
     DevPanel.vue                    Dev-only puzzle picker
     EditorGrid.vue                  The clickable design grid
     EditorView.vue                  Full editor screen: grid + toolbar + My Puzzles list

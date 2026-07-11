@@ -230,8 +230,9 @@ significance calculation actually clear before deciding.
    being empty at session start — no new event needed, just a property on
    the flag targeting).
 
-3. **Result-reveal pacing** — vary `RESULT_HOLD_MS` and the peg-pulse
-   timing in `ResultOverlay.vue`. *Hypothesis:* a snappier reveal increases
+3. **Result-reveal pacing** — vary `RESULT_HOLD_MS` in `PlayView.vue` and
+   the peg-pulse timing in `useResultReveal.js`. *Hypothesis:* a snappier
+   reveal increases
    share rate by getting to the shareable moment faster.
    *Primary metric:* `share_clicked` rate. No new instrumentation needed.
 

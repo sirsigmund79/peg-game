@@ -14,6 +14,17 @@
   (dev-only, see components/EditorView.vue) just handed off a custom
   design -- see resolvePuzzle() below.
 
+  Once the round ends, this ALSO orchestrates the whole result screen --
+  components/Board.vue is deliberately kept as a single, stable sibling in
+  `.game-area` the entire time (never unmounted/remounted, never a second
+  board rendered alongside it); only its `compact`/`masksOverride` props and
+  the elements around it change. Its own `compact` size transition plus the
+  existing round-over settle/ripple flourish (see Board.vue) are what make it
+  read as "the same board sliding into the result card," not a swap between
+  two different boards. See composables/useResultReveal.js for the one-shot
+  reveal sequencing (score count-up, rank pop-in), and logic/bestResults.js
+  for the "This game" vs "Best" toggle's persisted data.
+
   The only dev-only thing left on this page is the small "Watch Solve"
   button: unlike the puzzle-archive picker, sound tuner, and level editor
   (all moved to components/DevToolsView.vue), it operates on THIS live
@@ -24,13 +35,20 @@
 import { ref, watch, computed, onMounted, onBeforeUnmount } from 'vue';
 import { getTodaysPuzzle, getPuzzleForNumber } from '../logic/daily.js';
 import { useGame } from '../composables/useGame.js';
+import { useResultReveal } from '../composables/useResultReveal.js';
 import { useRouter } from '../composables/useRouter.js';
 import { pendingCustomPuzzle } from '../composables/usePendingPuzzle.js';
+import { getRankForOverPar } from '../logic/rules.js';
+import { getBestForPuzzle } from '../logic/bestResults.js';
+import { buildShareText } from '../services/viral.js';
 import { EVENTS, track } from '../services/analytics.js';
 import Board from './Board.vue';
 import StatBar from './StatBar.vue';
 import Controls from './Controls.vue';
-import ResultOverlay from './ResultOverlay.vue';
+import ResultHeader from './ResultHeader.vue';
+import ResultToggle from './ResultToggle.vue';
+import ResultStatRow from './ResultStatRow.vue';
+import ResultFooter from './ResultFooter.vue';
 import ArchiveDayStrip from './ArchiveDayStrip.vue';
 import TemporaryWatchSolveButton from './TemporaryWatchSolveButton.vue';
 
@@ -102,34 +120,27 @@ const formattedDate = computed(() => {
   });
 });
 
-// If the URL changes while this page is already mounted (an archive/dev
-// link to a different puzzle number, or browser back/forward), load
-// whatever it now points to.
-watch(
-  () => route.path,
-  () => {
-    reportIncompleteIfNeeded();
-    clearResultHold();
-    showResult.value = false;
-    showArchiveStrip.value = false;
-    puzzle.value = resolvePuzzle();
-    game.value = useGame(puzzle.value, { source: resolveSource() });
-  }
-);
+// --- the result screen: shown once the round ends, held back a beat so the
+// board's own end-of-round flourish plays before the layout changes -- see
+// the roundOver watcher below.
 
-// The board itself reacts to `game.roundOver` the instant it flips (see
-// Board.vue's own `round-over` cues), but ResultOverlay -- and the page
-// scroll it triggers -- is held back a beat so the player gets a moment on
-// the board's own end-of-round flourish before their eye gets yanked down
-// to the results.
 const prefersReducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 const RESULT_HOLD_MS = 800;
 const showResult = ref(false);
 // ArchiveDayStrip.vue (the archive callout below Undo/Reset) only comes in
-// once ResultOverlay's OWN reveal animation (rank + score count-up) has
-// finished -- see the `@revealed` listener below -- so it never competes
-// with that still-playing sequence for attention.
+// once the result reveal (score count-up + rank pop) has finished -- see
+// activateResult() below -- so it never competes with that still-playing
+// sequence for attention.
 const showArchiveStrip = ref(false);
+const resultGroupRef = ref(null);
+const reveal = useResultReveal();
+
+// 'this' (the attempt just played) or 'best' (the best-ever result for this
+// puzzle day -- see logic/bestResults.js). Always defaults to 'this' the
+// moment a round ends, even on a replay that beat -- or fell short of -- an
+// earlier best.
+const viewMode = ref('this');
+
 let resultHoldTimeoutId = null;
 
 function clearResultHold() {
@@ -139,24 +150,86 @@ function clearResultHold() {
   }
 }
 
+function activateResult() {
+  showResult.value = true;
+  viewMode.value = 'this';
+  reveal
+    .start({
+      scrollTargetEl: resultGroupRef.value,
+      geometry: game.value.geometry,
+      masks: game.value.state.masks,
+      par: game.value.par,
+      pegsRemaining: game.value.pegsRemaining,
+    })
+    .then(() => {
+      showArchiveStrip.value = true;
+    });
+}
+
 watch(
   () => game.value.roundOver,
   (isOver) => {
     clearResultHold();
     if (!isOver) {
+      reveal.cancel();
       showResult.value = false;
       showArchiveStrip.value = false;
       return;
     }
     if (prefersReducedMotion) {
-      showResult.value = true;
+      activateResult();
       return;
     }
     resultHoldTimeoutId = setTimeout(() => {
-      showResult.value = true;
+      activateResult();
       resultHoldTimeoutId = null;
     }, RESULT_HOLD_MS);
   }
+);
+
+// If the URL changes while this page is already mounted (an archive/dev
+// link to a different puzzle number, or browser back/forward), load
+// whatever it now points to.
+watch(
+  () => route.path,
+  () => {
+    reportIncompleteIfNeeded();
+    clearResultHold();
+    reveal.cancel();
+    showResult.value = false;
+    showArchiveStrip.value = false;
+    puzzle.value = resolvePuzzle();
+    game.value = useGame(puzzle.value, { source: resolveSource() });
+  }
+);
+
+// --- This game / Best -- a single result record drives everything the
+// result screen shows (rank, shy-of-GENIUS callout, board, stats, share
+// text), so switching the toggle is just switching which record populates
+// it; see components/ResultHeader.vue, ResultStatRow.vue, ResultFooter.vue,
+// and Board.vue's `masksOverride` prop.
+
+const bestRecord = computed(() => (puzzle.value.puzzleNumber != null ? getBestForPuzzle(puzzle.value.puzzleNumber) : undefined));
+
+const thisGameRecord = computed(() => ({
+  overPar: game.value.overPar,
+  pegsRemaining: game.value.pegsRemaining,
+  masks: game.value.state.masks,
+  won: game.value.hasWon,
+}));
+
+const displayedRecord = computed(() => (viewMode.value === 'best' && bestRecord.value ? bestRecord.value : thisGameRecord.value));
+
+const displayedTier = computed(() => getRankForOverPar(displayedRecord.value.overPar));
+
+const shareText = computed(() =>
+  buildShareText({
+    pegsRemaining: displayedRecord.value.pegsRemaining,
+    puzzleNumber: puzzle.value.puzzleNumber,
+    formattedDate: formattedDate.value,
+    rank: displayedTier.value.rank,
+    emoji: displayedTier.value.emoji,
+  })
 );
 
 onBeforeUnmount(() => {
@@ -180,13 +253,45 @@ onBeforeUnmount(() => {
         {{ puzzle.label }}
       </p>
 
-      <div class="game-area">
-        <StatBar :pegs-remaining="game.pegsRemaining" :move-count="game.state.moveCount" :par="game.par" />
+      <div ref="resultGroupRef" class="result-group" :class="{ 'with-divider': showResult }">
+        <div class="game-area">
+          <StatBar v-if="!showResult" :pegs-remaining="game.pegsRemaining" :move-count="game.state.moveCount" :par="game.par" />
+          <ResultHeader
+            v-else
+            :record="displayedTier"
+            :over-par="displayedRecord.overPar"
+            :formatted-date="formattedDate"
+            :revealed="reveal.rankRevealed"
+          />
 
-        <Board :game="game" />
+          <Board
+            :game="game"
+            :compact="showResult"
+            :masks-override="viewMode === 'best' ? displayedRecord.masks : null"
+            :pulsing-index="reveal.pulsingHoleIndex"
+          />
+        </div>
+
+        <template v-if="showResult">
+          <ResultToggle v-if="puzzle.puzzleNumber != null" v-model="viewMode" />
+          <ResultStatRow
+            :par="game.par"
+            :pegs-remaining="displayedRecord.pegsRemaining"
+            :displayed-score="reveal.displayedScore"
+            :score-bump-keys="reveal.scoreBumpKeys"
+            :is-revealing="viewMode === 'this' && !reveal.rankRevealed"
+          />
+          <ResultFooter
+            :share-text="shareText"
+            :puzzle-number="puzzle.puzzleNumber"
+            :rank="displayedTier.rank"
+            :won="displayedRecord.won"
+            :over-par="displayedRecord.overPar"
+            :result-source="viewMode"
+            @reset="game.reset()"
+          />
+        </template>
       </div>
-
-      <ResultOverlay v-if="showResult" :game="game" :puzzle="puzzle" @revealed="showArchiveStrip = true" />
 
       <TemporaryWatchSolveButton v-if="isDevBuild" :game="game" />
     </div>
@@ -239,5 +344,24 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 18px;
   width: 100%;
+}
+
+.result-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+}
+
+/* Once the round is over, this whole group (header/board through the
+   toggle/stats/Share+Reset row) reads as one self-contained, screenshot-
+   able "shareable card" -- separated with real breathing room from
+   ArchiveDayStrip.vue's "Catch up on recent days" strip below it, rather
+   than the two visually running together. */
+.result-group.with-divider {
+  padding-bottom: 24px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid rgba(36, 27, 20, 0.12);
 }
 </style>

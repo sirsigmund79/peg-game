@@ -2,13 +2,14 @@
   ============================================================================
   components/MiniBoard.vue
   ----------------------------------------------------------------------------
-  A small, non-interactive snapshot of a board's final position: one flat
-  circle per hole, colored exactly like the real game board (see
-  Board.vue) but without the tray, taps, or animations -- just enough for a
-  player to recognize "this is the board I just played" at a glance in the
-  result modal (see ResultOverlay.vue). Shares its layout math with
-  Board.vue via logic/boardLayout.js, so hole spacing/sizing rules can
-  never drift apart between the two.
+  A small, non-interactive snapshot of a board position: one flat circle per
+  hole, colored exactly like the real game board (see Board.vue) but without
+  the tray, taps, or animations -- used by StoryMapView.vue for its chapter-
+  map node previews. (The result screen used to use this too, but now reuses
+  Board.vue itself directly at a smaller size -- see its `compact` and
+  `masksOverride` props -- so there's only ever one board element on screen
+  there.) Shares its layout math with Board.vue via logic/boardLayout.js, so
+  hole spacing/sizing rules can never drift apart between the two.
   ============================================================================
 -->
 <script setup>

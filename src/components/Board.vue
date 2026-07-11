@@ -34,6 +34,7 @@
 import { computed, reactive, ref, watch, onBeforeUnmount } from 'vue';
 import { computeDisplayPositions, computeHoleDiameterPercent } from '../logic/boardLayout.js';
 import { getPegColor } from '../logic/pegColors.js';
+import { getColorAt } from '../logic/rules.js';
 
 const props = defineProps({
   // A useGame() instance -- see composables/useGame.js. Passed as a whole
@@ -50,6 +51,31 @@ const props = defineProps({
   friendHoles: {
     type: Array,
     default: () => [],
+  },
+  // Shrinks the board from its full-size gameplay dimensions down to the
+  // result screen's card size (see components/PlayView.vue) -- set once the
+  // round is over and its own settle/ripple flourish has played. Purely a
+  // CSS size change; this component's identity (and thus its DOM node)
+  // never changes, so there's only ever one board on screen -- see the
+  // compact CSS rules below for why plain padding on .board wouldn't work.
+  compact: {
+    type: Boolean,
+    default: false,
+  },
+  // A specific bigint[] mask snapshot to render INSTEAD of the live game's
+  // own state.masks -- used to show a saved "Best" attempt (see
+  // logic/bestResults.js) that may differ from whatever `game` currently
+  // holds. Left null, this component reads live state exactly as before.
+  masksOverride: {
+    type: Array,
+    default: null,
+  },
+  // Hole index to briefly pulse (ported from the now-retired MiniBoard-only
+  // behavior) -- drives the result screen's sequential score-reveal walk.
+  // -1 means no hole is currently pulsing.
+  pulsingIndex: {
+    type: Number,
+    default: -1,
   },
 });
 
@@ -80,18 +106,32 @@ function friendEmojiAt(index) {
 }
 
 function isSelected(index) {
+  if (props.masksOverride) return false;
   return props.game.state.selectedHole === index;
 }
 
 function isValidTarget(index) {
+  if (props.masksOverride) return false;
   return props.game.validTargetHoles.includes(index);
+}
+
+/** Whether hole `index` has a peg right now -- from `masksOverride` if given, otherwise the live game. */
+function holeHasPeg(index) {
+  if (props.masksOverride) return getColorAt(props.masksOverride, index) !== -1;
+  return props.game.holeHasPeg(index);
+}
+
+/** The color index of the peg at hole `index` -- from `masksOverride` if given, otherwise the live game. */
+function holeColorIndex(index) {
+  if (props.masksOverride) return getColorAt(props.masksOverride, index);
+  return props.game.getHoleColor(index);
 }
 
 /** Builds a human-readable label for screen readers, per hole. */
 function holeAriaLabel(index) {
-  const filled = props.game.holeHasPeg(index);
+  const filled = holeHasPeg(index);
   if (!filled) return friendEmojiAt(index) ? `A friend, revealed, at hole ${index}` : `Empty hole ${index}`;
-  return `${getPegColor(props.game.getHoleColor(index)).name} peg at hole ${index}`;
+  return `${getPegColor(holeColorIndex(index)).name} peg at hole ${index}`;
 }
 
 /**
@@ -106,7 +146,7 @@ function pegColorAt(index) {
   if (move && index === move.over) {
     return animatingColorHex.value;
   }
-  return getPegColor(props.game.getHoleColor(index)).hex;
+  return getPegColor(holeColorIndex(index)).hex;
 }
 
 // --- jump animation: a peg travels over the jumped peg, which dissolves --
@@ -189,73 +229,128 @@ function shouldShowPeg(index) {
     if (index === move.to) return false;
     if (index === move.over) return true;
   }
-  return props.game.holeHasPeg(index);
+  return holeHasPeg(index);
 }
 
 /** Whether hole `index` is the jumped-over peg currently fading out. */
 function isDissolving(index) {
   return animatingMove.value?.over === index;
 }
+
+/** Taps are ignored once a specific (non-live) board snapshot is being shown -- e.g. the result screen's "Best" view -- since there's no live game to act on. Live play still delegates to game.selectHole(), which itself already no-ops once the round is over. */
+function handleHoleClick(index) {
+  if (props.masksOverride) return;
+  props.game.selectHole(index);
+}
 </script>
 
 <template>
-  <div class="board" :class="{ 'round-over': game.roundOver }" :style="{ '--hole-size': holeDiameterPercent + '%' }">
-    <button
-      v-for="(position, index) in holePositions"
-      :key="index"
-      type="button"
-      class="hole"
-      :class="{
-        filled: shouldShowPeg(index),
-        selected: isSelected(index),
-        target: isValidTarget(index),
-      }"
-      :style="{ left: position.left, top: position.top, '--ripple-delay': rippleDelayMs(index) + 'ms' }"
-      :aria-label="holeAriaLabel(index)"
-      :aria-pressed="isSelected(index)"
-      @click="game.selectHole(index)"
-    >
-      <Transition name="friend-pop">
-        <span v-if="!shouldShowPeg(index) && friendEmojiAt(index)" class="friend-glyph" aria-hidden="true">{{
-          friendEmojiAt(index)
-        }}</span>
-      </Transition>
-      <span
-        v-if="shouldShowPeg(index)"
-        class="peg"
-        :class="{ dissolving: isDissolving(index) }"
-        :style="{ backgroundColor: pegColorAt(index) }"
-        aria-hidden="true"
-      ></span>
-    </button>
+  <div
+    class="board"
+    :class="{ 'round-over': game.roundOver, compact }"
+    :style="{ '--hole-size': holeDiameterPercent + '%' }"
+  >
+    <div class="hole-plane">
+      <button
+        v-for="(position, index) in holePositions"
+        :key="index"
+        type="button"
+        class="hole"
+        :class="{
+          filled: shouldShowPeg(index),
+          selected: isSelected(index),
+          target: isValidTarget(index),
+          pulsing: index === pulsingIndex,
+        }"
+        :style="{ left: position.left, top: position.top, '--ripple-delay': rippleDelayMs(index) + 'ms' }"
+        :aria-label="holeAriaLabel(index)"
+        :aria-pressed="isSelected(index)"
+        @click="handleHoleClick(index)"
+      >
+        <Transition name="friend-pop">
+          <span v-if="!shouldShowPeg(index) && friendEmojiAt(index)" class="friend-glyph" aria-hidden="true">{{
+            friendEmojiAt(index)
+          }}</span>
+        </Transition>
+        <span
+          v-if="shouldShowPeg(index)"
+          class="peg"
+          :class="{ dissolving: isDissolving(index) }"
+          :style="{ backgroundColor: pegColorAt(index) }"
+          aria-hidden="true"
+        ></span>
+      </button>
 
-    <!-- The peg physically mid-jump -- positioned independently of any
-         hole so it can arc smoothly between two of them. -->
-    <div
-      v-if="animatingMove"
-      class="travel-slot"
-      aria-hidden="true"
-      :style="{ left: travel.leftPercent + '%', top: travel.topPercent + '%' }"
-    >
-      <span class="peg" :style="{ transform: `scale(${travel.scale})`, backgroundColor: animatingColorHex }"></span>
+      <!-- The peg physically mid-jump -- positioned independently of any
+           hole so it can arc smoothly between two of them. -->
+      <div
+        v-if="animatingMove"
+        class="travel-slot"
+        aria-hidden="true"
+        :style="{ left: travel.leftPercent + '%', top: travel.topPercent + '%' }"
+      >
+        <span class="peg" :style="{ transform: `scale(${travel.scale})`, backgroundColor: animatingColorHex }"></span>
+      </div>
     </div>
   </div>
 </template>
 
 <style scoped>
 .board {
+  box-sizing: border-box;
   position: relative;
   /* The hero element: sized off both viewport width and height so it
      reliably fills roughly two-thirds of a mobile screen's vertical
      space, no matter how tall the header/stats/controls end up being. */
   width: min(95vw, 66dvh);
   max-width: 460px;
+  padding: 0;
   aspect-ratio: 1 / 1;
   margin: 0 auto;
   background: var(--color-board-plate);
   border: var(--frame-border);
   border-radius: var(--frame-radius-board);
   box-shadow: var(--frame-shadow-board);
+  /* Shrinks into the result screen's card size/position (see the `compact`
+     prop) by animating its own size -- the same board element, never a
+     second one, "moves" purely because it stays centered (margin: 0 auto)
+     while sibling elements above/below it (see PlayView.vue) come and go
+     around it. */
+  transition:
+    width 0.4s ease,
+    max-width 0.4s ease,
+    padding 0.4s ease;
+}
+
+.board.compact {
+  width: 240px;
+  max-width: 240px;
+  padding: 16px;
+}
+
+.board.compact .hole {
+  cursor: default;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .board {
+    transition: none;
+  }
+}
+
+/* The actual positioning context for holes/travel-slot -- deliberately
+   NOT `.board` itself. Percentage top/left offsets on an absolutely
+   positioned element resolve against its containing block's PADDING box,
+   whose size is fixed by width/border alone and is untouched by how much
+   of it padding vs. content occupies -- so if `.board`'s own padding grew
+   in compact mode, the holes would never actually appear inset from its
+   edge. Giving `.hole-plane` its own `position: relative` box (sized to
+   fill whatever content area `.board`'s padding leaves it) is what makes
+   the compact padding above actually read as a visible inset. */
+.hole-plane {
+  position: relative;
+  width: 100%;
+  height: 100%;
 }
 
 /* A one-shot "something just happened" cue the instant the round ends --
@@ -313,8 +408,16 @@ function isDissolving(index) {
 /* The rest of the end-of-round flourish: every remaining peg gets a
    highlight pulse, staggered via --ripple-delay (set per-hole above) so it
    reads as one wave radiating outward from the board's center. Brief and
-   self-reversing -- it leaves no lasting style change once it finishes. */
-.board.round-over .hole.filled .peg:not(.dissolving) {
+   self-reversing -- it leaves no lasting style change once it finishes.
+   Scoped to :not(.compact): `round-over` never turns back off, but
+   `compact` turns on ~800ms later (see PlayView.vue's RESULT_HOLD_MS) --
+   so this still fires exactly once, at full size, the instant the round
+   ends. Without the :not(.compact) guard, switching the result screen's
+   This game/Best toggle later (which adds/removes individual .peg
+   elements as the shown board snapshot changes) would re-trigger this
+   pulse on every newly-inserted peg, which the toggle is explicitly meant
+   NOT to do. */
+.board.round-over:not(.compact) .hole.filled .peg:not(.dissolving) {
   animation: peg-pulse 0.5s ease-out;
   animation-delay: var(--ripple-delay, 0ms);
 }
@@ -335,7 +438,33 @@ function isDissolving(index) {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .board.round-over .hole.filled .peg:not(.dissolving) {
+  .board.round-over:not(.compact) .hole.filled .peg:not(.dissolving) {
+    animation: none;
+  }
+}
+
+/* The result screen's sequential score-reveal walk (see
+   composables/useResultReveal.js) briefly pulses one hole at a time as it
+   ticks that peg's color count up -- this is the "it's this one's turn"
+   cue, ported from the now-retired MiniBoard.vue. */
+.hole.pulsing .peg {
+  animation: hole-pulse 0.3s ease-out;
+}
+
+@keyframes hole-pulse {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.35);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hole.pulsing .peg {
     animation: none;
   }
 }

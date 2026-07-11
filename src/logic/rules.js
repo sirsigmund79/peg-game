@@ -177,12 +177,15 @@ export function countPegsRemaining(masks) {
  * always `overPar === 0` under the old single-color rule; these thresholds
  * carry that over unchanged). Kept as one ordered list (rather than a
  * chain of if-statements) for easy scanning/testing.
+ *
+ * `size` is the rank title's font size on the result screen -- de-emphasizes
+ * the lower tiers so GENIUS stays the one hero-sized moment.
  */
 export const RANK_TIERS = [
-  { overPar: null, rank: 'Eg-no-ra-moose', emoji: '' },
-  { overPar: 2, rank: 'Not bad', emoji: '' },
-  { overPar: 1, rank: 'Purty smart', emoji: '' },
-  { overPar: 0, rank: 'GENIUS', emoji: '🧠' },
+  { overPar: null, rank: 'Eg-no-ra-moose', emoji: '', size: '1.05rem' },
+  { overPar: 2, rank: 'Not bad', emoji: '', size: '1.25rem' },
+  { overPar: 1, rank: 'Purty smart', emoji: '', size: '1.55rem' },
+  { overPar: 0, rank: 'GENIUS', emoji: '🧠', size: '1.9rem' },
 ];
 
 /**
@@ -192,9 +195,9 @@ export const RANK_TIERS = [
  * the exact same wording.
  *
  * @param {number} overPar
- * @returns {{rank: string, emoji: string}}
+ * @returns {{rank: string, emoji: string, size: string}}
  */
 export function getRankForOverPar(overPar) {
   const tier = RANK_TIERS.find((candidate) => candidate.overPar === overPar) ?? RANK_TIERS[0];
-  return { rank: tier.rank, emoji: tier.emoji };
+  return { rank: tier.rank, emoji: tier.emoji, size: tier.size };
 }
