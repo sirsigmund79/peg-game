@@ -336,13 +336,22 @@ function handleHoleClick(index) {
   transition:
     width 0.4s ease,
     max-width 0.4s ease,
+    height 0.4s ease,
     padding 0.4s ease;
 }
 
 .board.compact {
   width: 240px;
   max-width: 240px;
-  padding: 16px;
+  /* Pinned explicitly rather than left to `aspect-ratio` above -- some
+     browsers resolve `aspect-ratio` against the content box even under
+     `box-sizing: border-box` while this size is still settling out of its
+     width transition, which briefly (or, on some engines, permanently)
+     skews the board a few pixels taller than wide and pushes the bottom
+     row of holes past the board's own rounded corner/border. Fixing both
+     dimensions here sidesteps that outright. */
+  height: 240px;
+  padding: 20px;
 }
 
 .board.compact .hole {

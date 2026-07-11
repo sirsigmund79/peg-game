@@ -126,11 +126,21 @@ const formattedDate = computed(() => {
 
 const prefersReducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 const RESULT_HOLD_MS = 800;
+// Matches Board.vue's own `.board` transition duration for the compact
+// (result-card) size -- the archive strip below waits this long before
+// appearing so it comes in right as the board finishes shrinking, not
+// mid-shrink.
+const BOARD_SHRINK_MS = 400;
 const showResult = ref(false);
-// ArchiveDayStrip.vue (the archive callout below Undo/Reset) only comes in
-// once the result reveal (score count-up + rank pop) has finished -- see
-// activateResult() below -- so it never competes with that still-playing
-// sequence for attention.
+// ArchiveDayStrip.vue (the archive callout below Undo/Reset) comes in as
+// soon as the board has shrunk down to its result-card size -- see
+// activateResult() below -- rather than waiting on the score count-up/rank
+// pop reveal (see composables/useResultReveal.js), which can run for
+// several more seconds depending on how many pegs are left. The rank's own
+// layout space is reserved from the moment the board shrinks (see
+// ResultHeader.vue -- it stays opacity:0 but in-flow until revealed), so
+// bringing the archive strip in this early doesn't shift anything out from
+// under the still-playing reveal.
 const showArchiveStrip = ref(false);
 const resultGroupRef = ref(null);
 const reveal = useResultReveal();
@@ -142,11 +152,16 @@ const reveal = useResultReveal();
 const viewMode = ref('this');
 
 let resultHoldTimeoutId = null;
+let archiveStripTimeoutId = null;
 
 function clearResultHold() {
   if (resultHoldTimeoutId !== null) {
     clearTimeout(resultHoldTimeoutId);
     resultHoldTimeoutId = null;
+  }
+  if (archiveStripTimeoutId !== null) {
+    clearTimeout(archiveStripTimeoutId);
+    archiveStripTimeoutId = null;
   }
 }
 
@@ -165,25 +180,29 @@ function activateResult() {
   resultVersion.value += 1;
   showResult.value = true;
   viewMode.value = 'this';
-  reveal
-    .start({
-      scrollTargetEl: resultGroupRef.value,
-      geometry: game.value.geometry,
-      masks: game.value.state.masks,
-      par: game.value.par,
-      pegsRemaining: game.value.pegsRemaining,
-    })
-    .then(() => {
+  reveal.start({
+    scrollTargetEl: resultGroupRef.value,
+    geometry: game.value.geometry,
+    masks: game.value.state.masks,
+    par: game.value.par,
+    pegsRemaining: game.value.pegsRemaining,
+  });
+  if (prefersReducedMotion) {
+    showArchiveStrip.value = true;
+  } else {
+    archiveStripTimeoutId = setTimeout(() => {
       showArchiveStrip.value = true;
-    });
+      archiveStripTimeoutId = null;
+    }, BOARD_SHRINK_MS);
+  }
 }
 
-/** Handles a This game/Best toggle click. If the just-finished round's own reveal (score count-up, rank pop) hasn't finished playing yet, skip straight to its end first -- so the toggle always reads as an instant swap, never a mid-flight jump-cut, and the archive strip (which otherwise waits for that reveal to finish on its own) still comes in right away. */
+/** Handles a This game/Best toggle click. If the just-finished round's own reveal (score count-up, rank pop) hasn't finished playing yet, skip straight to its end first -- so the toggle always reads as an instant swap, never a mid-flight jump-cut. Also makes sure the archive strip is showing (normally already true by this point -- see the BOARD_SHRINK_MS timeout above -- but a toggle tapped in that first instant shouldn't have to wait out the rest of it). */
 function handleViewModeChange(mode) {
   if (!reveal.rankRevealed) {
     reveal.finishNow();
-    showArchiveStrip.value = true;
   }
+  showArchiveStrip.value = true;
   viewMode.value = mode;
 }
 
@@ -330,7 +349,11 @@ onBeforeUnmount(() => {
       @reset="game.reset()"
     />
 
-    <ArchiveDayStrip v-if="showArchiveStrip && puzzle.puzzleNumber != null" :key="puzzle.puzzleNumber" />
+    <ArchiveDayStrip
+      v-if="showArchiveStrip && puzzle.puzzleNumber != null"
+      :key="puzzle.puzzleNumber"
+      :keep-visible-el="resultGroupRef"
+    />
   </div>
 </template>
 
