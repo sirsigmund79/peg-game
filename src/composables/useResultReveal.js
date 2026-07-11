@@ -9,9 +9,9 @@
 //
 // This only ever plays for the freshly-finished round ("This game"). It is
 // NOT replayed when the result screen's This game/Best toggle switches (see
-// components/PlayView.vue) -- that swap is instant/static, driven by reading
-// `rankRevealed`/`displayedScore` as already-settled values rather than
-// calling start() again.
+// components/PlayView.vue) -- if the player touches the toggle before the
+// walk finishes on its own, `finishNow()` jumps straight to the fully-
+// revealed state instead, so the toggle's swap always reads as instant.
 //
 // Extracted out of the now-retired ResultOverlay.vue so components/Board.vue
 // can be the one component that owns rendering the board itself (see its
@@ -33,12 +33,28 @@ export function useResultReveal() {
   const prefersReducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
   let pulseTimeoutId = null;
+  let lastPegsRemaining = null;
+  // Bumped by cancel()/start() to invalidate any in-flight reveal. Clearing
+  // `pulseTimeoutId` alone only stops the peg-walk phase -- it can't reach
+  // into a still-pending waitForScrollSettle() call (that has its own
+  // internal timer/listener), so a reveal cancelled during that earlier
+  // phase would otherwise resume once the scroll settles and finish minutes
+  // later, mutating state and resolving `start()` for a round that's no
+  // longer current. Every await point below re-checks this before touching
+  // any state.
+  let generation = 0;
 
   function stopPulses() {
     if (pulseTimeoutId !== null) {
       clearTimeout(pulseTimeoutId);
       pulseTimeoutId = null;
     }
+  }
+
+  /** Aborts an in-flight reveal (e.g. the player hit Reset mid-walk). The abandoned `start()` call's promise then never resolves, so anything chained off it (like PlayView.vue bringing in ArchiveDayStrip) correctly never fires for the abandoned round. */
+  function cancel() {
+    generation += 1;
+    stopPulses();
   }
 
   /** The result area can land off the bottom of a short screen -- bring it into view before anything animates, rather than having the reveal play out while the page is still scrolling underneath it. */
@@ -83,23 +99,26 @@ export function useResultReveal() {
 
   /**
    * Kicks off the reveal for a just-finished round. Call this exactly once
-   * per round (never on a This game/Best toggle switch).
+   * per round (never on a This game/Best toggle switch -- see finishNow()).
    *
    * @param {object} params
    * @param {HTMLElement|null} params.scrollTargetEl - scrolled into view before the reveal starts
    * @param {object} params.geometry - the puzzle's board geometry (see logic/geometry.js)
    * @param {bigint[]} params.masks - the round's final masks, one per color
    * @param {number[]} params.par - the puzzle's per-color par, used to size the score arrays
-   * @param {number[]} params.pegsRemaining - final per-color peg counts (used directly under reduced motion, which skips the walk)
+   * @param {number[]} params.pegsRemaining - final per-color peg counts (used directly under reduced motion, or once finishNow() is called)
    */
   async function start({ scrollTargetEl, geometry, masks, par, pegsRemaining }) {
-    stopPulses();
+    cancel();
+    const myGeneration = generation;
+    lastPegsRemaining = pegsRemaining;
     displayedScore.value = par.map(() => null);
     scoreBumpKeys.value = par.map(() => 0);
     pulsingHoleIndex.value = -1;
     rankRevealed.value = false;
 
     await waitForScrollSettle(scrollTargetEl);
+    if (myGeneration !== generation) return new Promise(() => {}); // abandoned while the scroll was still settling -- never resolve
 
     if (prefersReducedMotion) {
       displayedScore.value = [...pegsRemaining];
@@ -114,14 +133,19 @@ export function useResultReveal() {
       .sort((a, b) => a.y - b.y || a.x - b.x);
 
     await runPegPulses(sequence, 0);
+    if (myGeneration !== generation) return new Promise(() => {}); // abandoned or skipped-to-end mid-walk -- never resolve
     rankRevealed.value = true;
   }
 
-  onBeforeUnmount(stopPulses);
+  /** Jumps straight to the fully-revealed state -- used when the player touches the This game/Best toggle before the walk finishes on its own, so the toggle always reads as an instant swap rather than fast-forwarding a still-playing animation. */
+  function finishNow() {
+    cancel();
+    if (lastPegsRemaining) displayedScore.value = [...lastPegsRemaining];
+    pulsingHoleIndex.value = -1;
+    rankRevealed.value = true;
+  }
 
-  // Aborts an in-flight reveal (e.g. the player hit Reset mid-walk) --
-  // simply stops the pulse timer; the pending `start()` promise then never
-  // resolves, so anything chained off it (like PlayView.vue bringing in
-  // ArchiveDayStrip) correctly never fires for the abandoned round.
-  return { rankRevealed, displayedScore, scoreBumpKeys, pulsingHoleIndex, start, cancel: stopPulses };
+  onBeforeUnmount(cancel);
+
+  return { rankRevealed, displayedScore, scoreBumpKeys, pulsingHoleIndex, start, cancel, finishNow };
 }

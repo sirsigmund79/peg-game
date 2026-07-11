@@ -37,10 +37,9 @@ defineProps({
       <span class="stat-value multi">
         <span v-for="(count, colorIndex) in pegsRemaining" :key="colorIndex" class="color-count">
           <span class="dot" :style="{ background: getPegColor(colorIndex).hex }" aria-hidden="true"></span
-          ><span v-if="isRevealing" :key="`reveal-${colorIndex}-${scoreBumpKeys[colorIndex]}`" class="count-number">{{
-            displayedScore[colorIndex] ?? ''
-          }}</span
-          ><span v-else class="count-number">{{ count }}</span>
+          ><span :key="isRevealing ? `reveal-${colorIndex}-${scoreBumpKeys[colorIndex]}` : 'static'" class="count-number">{{
+            isRevealing ? (displayedScore[colorIndex] ?? '') : count
+          }}</span>
         </span>
       </span>
       <span class="stat-label">Your score</span>

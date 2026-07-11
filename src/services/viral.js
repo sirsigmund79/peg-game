@@ -9,7 +9,7 @@
 // loads that specific day regardless of what "today" is when it's opened),
 // so sharing an archive day sends people to that day, not just today's.
 //
-// No Vue code lives here -- ResultOverlay.vue calls these plain functions
+// No Vue code lives here -- ResultFooter.vue calls these plain functions
 // and just displays whatever comes back.
 // ============================================================================
 
@@ -67,4 +67,32 @@ export async function copyTextToClipboard(text) {
   } catch (error) {
     return false;
   }
+}
+
+/**
+ * Shares a result: always copies the text to the clipboard first (so it's
+ * there to paste even if the device has no share sheet, or the player
+ * cancels it), then -- on a device that supports it (mainly mobile) --
+ * opens the OS's native share sheet with that same text, so it's a couple
+ * taps to send straight to a specific contact or messaging app instead of
+ * pasting it in by hand.
+ *
+ * @param {string} text
+ * @returns {Promise<{copied: boolean, shared: boolean}>}
+ */
+export async function shareResult(text) {
+  const copied = await copyTextToClipboard(text);
+  let shared = false;
+  if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+    try {
+      await navigator.share({ text });
+      shared = true;
+    } catch (error) {
+      // The player cancelled the share sheet, or the platform rejected the
+      // request outright -- either way the clipboard copy above already
+      // succeeded (or didn't) independently, so there's nothing left to
+      // recover here.
+    }
+  }
+  return { copied, shared };
 }

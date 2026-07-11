@@ -3,18 +3,23 @@
   components/ResultFooter.vue
   ----------------------------------------------------------------------------
   "Share Score" and "Reset", side by side, lifted out of the now-retired
-  ResultOverlay.vue. Share copies a spoiler-safe result line (built by the
-  caller via services/viral.js -- see the `shareText` prop, sourced from
-  whichever result record components/PlayView.vue's This game/Best toggle is
-  currently showing) to the clipboard. Reset starts the same puzzle over (see
-  composables/useGame.js's reset()); it lives here rather than in
-  components/Controls.vue once the round is over, since PlayView.vue hides
-  Controls at that point in favor of this row.
+  ResultOverlay.vue. Share always copies a spoiler-safe result line (built
+  by the caller via services/viral.js -- see the `shareText` prop, sourced
+  from whichever result record components/PlayView.vue's This game/Best
+  toggle is currently showing) to the clipboard, THEN also opens the
+  device's native share sheet if one is available (see
+  services/viral.js's shareResult(), built on the Web Share API) -- so on a
+  phone this is a couple of taps to send straight to a contact or messaging
+  app, with the clipboard copy as the reliable fallback everywhere else.
+  Reset starts the same puzzle over (see composables/useGame.js's reset());
+  it lives here rather than in components/Controls.vue once the round is
+  over, since PlayView.vue hides Controls at that point in favor of this
+  row.
   ============================================================================
 -->
 <script setup>
 import { ref } from 'vue';
-import { copyTextToClipboard } from '../services/viral.js';
+import { shareResult } from '../services/viral.js';
 import { EVENTS, track } from '../services/analytics.js';
 
 const props = defineProps({
@@ -38,9 +43,9 @@ async function handleShareClick() {
     over_par: props.overPar,
     result_source: props.resultSource,
   });
-  const didCopy = await copyTextToClipboard(props.shareText);
-  shareStatusMessage.value = didCopy ? 'Copied to clipboard!' : "Couldn't copy -- try again, or share a screenshot instead.";
-  track(EVENTS.SHARE_COPY_RESULT, { puzzle_number: props.puzzleNumber ?? null, success: didCopy, result_source: props.resultSource });
+  const { copied, shared } = await shareResult(props.shareText);
+  shareStatusMessage.value = copied ? 'Copied to clipboard!' : "Couldn't copy -- try again, or share a screenshot instead.";
+  track(EVENTS.SHARE_COPY_RESULT, { puzzle_number: props.puzzleNumber ?? null, success: copied, shared, result_source: props.resultSource });
 }
 </script>
 

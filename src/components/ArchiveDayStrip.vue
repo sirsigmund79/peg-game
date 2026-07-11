@@ -2,31 +2,34 @@
   ============================================================================
   components/ArchiveDayStrip.vue
   ----------------------------------------------------------------------------
-  The "more obvious archive callout" shown on the result screen, once
-  ResultOverlay.vue's own reveal animation has finished (see PlayView.vue's
-  `showArchiveStrip`, set from ResultOverlay's `@revealed`). A horizontal
-  strip of the last few archive days -- always anchored on TODAY's puzzle
-  number, not whichever puzzle was just played, so this reads as "the
-  archive's most recent days" rather than shifting around when replaying an
-  old day -- each shown as a tile with its own peg-dot glyph (real colors,
-  via PuzzleGlyph.vue's `holeColors` prop) instead of a generic icon, plus a
-  final "Explore the Archive" tile. Kept to a small day count (see
-  RECENT_DAY_COUNT below) so each tile stays roomy enough for its rank text
-  to wrap without spilling past its own border.
+  The "more obvious archive callout" shown on the result screen, once the
+  just-finished round's own reveal animation has finished (see
+  composables/useResultReveal.js and PlayView.vue's `showArchiveStrip`, set
+  once that reveal's promise resolves -- or immediately, if the player
+  touches the This game/Best toggle before it finishes on its own). A
+  horizontal strip of the last few archive days -- always anchored on
+  TODAY's puzzle number, not whichever puzzle was just played, so this reads
+  as "the archive's most recent days" rather than shifting around when
+  replaying an old day -- each shown as a tile with its own peg-dot glyph
+  (real colors, via PuzzleGlyph.vue's `holeColors` prop) instead of a
+  generic icon, plus a final "Explore the Archive" tile. Kept to a small day
+  count (see RECENT_DAY_COUNT below) so each tile stays roomy enough for its
+  rank text to wrap without spilling past its own border.
 
   On a touch device this scrolls/swipes with snap, peeking the next tile,
   the same feel as the NYT Games home screen this is modeled on. On a real
   mouse (see the `(hover: hover) and (pointer: fine)` query below -- the
-  same "is this a mouse, not a finger" signal Controls.vue/ResultOverlay.vue
+  same "is this a mouse, not a finger" signal Controls.vue/ResultFooter.vue
   already use) the tiles instead compress to fit the strip's own width with
   no scrolling at all, since a desktop player has no swipe gesture to
   discover the extra tiles with.
 
-  ResultOverlay.vue's own scroll (see its waitForScrollSettle) only brings
-  the result modal into view -- it fires before this strip even mounts, so
-  on a short screen the strip can still land below the fold. Once mounted,
-  this scrolls itself the rest of the way into view so a player never has
-  to scroll manually just to see the archive callout exists.
+  The result screen's own scroll (see useResultReveal.js's
+  waitForScrollSettle) only brings that screen into view -- it fires before
+  this strip even mounts, so on a short screen the strip can still land
+  below the fold. Once mounted, this scrolls itself the rest of the way
+  into view so a player never has to scroll manually just to see the
+  archive callout exists.
   ============================================================================
 -->
 <script setup>
@@ -122,9 +125,10 @@ function goToArchive() {
   max-width: 460px;
   margin: 0 auto;
   padding: 0 20px 20px;
-  /* A one-shot entrance, matching ResultOverlay.vue's modal-enter -- this
-     only ever mounts once ResultOverlay's own reveal has finished (see
-     PlayView.vue), so it reads as the next distinct "beat" after that. */
+  /* A one-shot entrance, matching PlayView.vue's own .result-extras-enter --
+     this only ever mounts once the result screen's own reveal has finished
+     (see composables/useResultReveal.js), so it reads as the next distinct
+     "beat" after that. */
   animation: strip-enter 0.35s ease-out;
 }
 

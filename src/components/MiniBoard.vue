@@ -20,8 +20,7 @@ import { getPegColor } from '../logic/pegColors.js';
 
 const props = defineProps({
   geometry: { type: Object, required: true },
-  masks: { type: Array, required: true }, // final bigint bitmasks -- which holes still have a peg, one per color
-  pulsingIndex: { type: Number, default: -1 }, // hole index to briefly pulse (see ResultOverlay's score reveal), or -1 for none
+  masks: { type: Array, required: true }, // bigint bitmasks -- which holes have a peg, one per color
 });
 
 const positions = computed(() => computeDisplayPositions(props.geometry));
@@ -42,7 +41,7 @@ function holeHasPeg(index) {
       v-for="(position, index) in positions"
       :key="index"
       class="hole"
-      :class="{ filled: holeHasPeg(index), pulsing: index === pulsingIndex }"
+      :class="{ filled: holeHasPeg(index) }"
       :style="{ left: position.left, top: position.top }"
     >
       <span v-if="holeHasPeg(index)" class="peg" :style="{ backgroundColor: getPegColor(holeColor(index)).hex }" aria-hidden="true"></span>
@@ -77,29 +76,5 @@ function holeHasPeg(index) {
   border-radius: 50%;
   /* background-color set inline per-peg -- see holeColor()/getPegColor() above. */
   filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.15));
-}
-
-/* The score reveal (see ResultOverlay) walks the remaining pegs one at a
-   time -- this is the "it's this one's turn" cue on the mini board itself. */
-.hole.pulsing .peg {
-  animation: hole-pulse 0.3s ease-out;
-}
-
-@keyframes hole-pulse {
-  0% {
-    transform: scale(1);
-  }
-  40% {
-    transform: scale(1.35);
-  }
-  100% {
-    transform: scale(1);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .hole.pulsing .peg {
-    animation: none;
-  }
 }
 </style>

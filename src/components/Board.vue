@@ -105,26 +105,39 @@ function friendEmojiAt(index) {
   return friendEmojiByIndex.value.get(index);
 }
 
+// Whichever masks array is actually on screen right now -- `masksOverride`
+// if given (a static snapshot, e.g. the result screen's "Best" view), else
+// the live game's own state. Reading hole contents through this ONE array
+// (rather than branching per-function between `masksOverride` and
+// `props.game.holeHasPeg`/`getHoleColor`) means every helper below shares
+// the exact same source of truth instead of re-deriving the same branch six
+// different ways.
+const activeMasks = computed(() => props.masksOverride ?? props.game.state.masks);
+
+// True only for the live, playable board -- false whenever a static
+// snapshot is being shown instead (masksOverride set). Selection, taps, and
+// the jump-arc animation all gate on this, so a snapshot view can never be
+// nudged into looking interactive, and a future jump on the underlying live
+// `game` (e.g. from a dev tool) can't animate across a snapshot that isn't
+// actually showing that game's current state.
+const interactive = computed(() => props.masksOverride === null);
+
 function isSelected(index) {
-  if (props.masksOverride) return false;
-  return props.game.state.selectedHole === index;
+  return interactive.value && props.game.state.selectedHole === index;
 }
 
 function isValidTarget(index) {
-  if (props.masksOverride) return false;
-  return props.game.validTargetHoles.includes(index);
+  return interactive.value && props.game.validTargetHoles.includes(index);
 }
 
-/** Whether hole `index` has a peg right now -- from `masksOverride` if given, otherwise the live game. */
+/** Whether hole `index` has a peg right now, per `activeMasks`. */
 function holeHasPeg(index) {
-  if (props.masksOverride) return getColorAt(props.masksOverride, index) !== -1;
-  return props.game.holeHasPeg(index);
+  return getColorAt(activeMasks.value, index) !== -1;
 }
 
-/** The color index of the peg at hole `index` -- from `masksOverride` if given, otherwise the live game. */
+/** The color index of the peg at hole `index` right now, per `activeMasks`. */
 function holeColorIndex(index) {
-  if (props.masksOverride) return getColorAt(props.masksOverride, index);
-  return props.game.getHoleColor(index);
+  return getColorAt(activeMasks.value, index);
 }
 
 /** Builds a human-readable label for screen readers, per hole. */
@@ -213,8 +226,11 @@ watch(
   () => props.game.state.lastMove,
   (move) => {
     // Reduced-motion players get the instant, un-animated state change --
-    // never start the arc tween for them.
-    if (move && !prefersReducedMotion) animateJump(move);
+    // never start the arc tween for them. A static snapshot (masksOverride
+    // set) never animates either, even if the underlying `game` it's
+    // attached to happens to record a move -- there's no guarantee that
+    // move has anything to do with the snapshot currently on screen.
+    if (move && interactive.value && !prefersReducedMotion) animateJump(move);
   }
 );
 
@@ -239,7 +255,7 @@ function isDissolving(index) {
 
 /** Taps are ignored once a specific (non-live) board snapshot is being shown -- e.g. the result screen's "Best" view -- since there's no live game to act on. Live play still delegates to game.selectHole(), which itself already no-ops once the round is over. */
 function handleHoleClick(index) {
-  if (props.masksOverride) return;
+  if (!interactive.value) return;
   props.game.selectHole(index);
 }
 </script>
@@ -264,7 +280,8 @@ function handleHoleClick(index) {
         }"
         :style="{ left: position.left, top: position.top, '--ripple-delay': rippleDelayMs(index) + 'ms' }"
         :aria-label="holeAriaLabel(index)"
-        :aria-pressed="isSelected(index)"
+        :aria-pressed="interactive ? isSelected(index) : undefined"
+        :tabindex="interactive ? undefined : -1"
         @click="handleHoleClick(index)"
       >
         <Transition name="friend-pop">

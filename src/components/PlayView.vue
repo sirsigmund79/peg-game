@@ -150,7 +150,19 @@ function clearResultHold() {
   }
 }
 
+// Bumped every time a round's result becomes current (see activateResult()
+// below) so `bestRecord` (further down) re-reads logic/bestResults.js's
+// localStorage-backed store instead of returning a value it cached from an
+// earlier attempt at this same puzzle. Vue's computed() only re-runs when a
+// TRACKED reactive dependency changes -- and getBestForPuzzle() reads plain
+// localStorage, which isn't reactive at all -- so without this, replaying
+// the same puzzle (Reset, from the archive) and beating your previous best
+// would leave the "Best" toggle showing the stale old result until the
+// puzzle itself changes.
+const resultVersion = ref(0);
+
 function activateResult() {
+  resultVersion.value += 1;
   showResult.value = true;
   viewMode.value = 'this';
   reveal
@@ -164,6 +176,15 @@ function activateResult() {
     .then(() => {
       showArchiveStrip.value = true;
     });
+}
+
+/** Handles a This game/Best toggle click. If the just-finished round's own reveal (score count-up, rank pop) hasn't finished playing yet, skip straight to its end first -- so the toggle always reads as an instant swap, never a mid-flight jump-cut, and the archive strip (which otherwise waits for that reveal to finish on its own) still comes in right away. */
+function handleViewModeChange(mode) {
+  if (!reveal.rankRevealed) {
+    reveal.finishNow();
+    showArchiveStrip.value = true;
+  }
+  viewMode.value = mode;
 }
 
 watch(
@@ -209,7 +230,10 @@ watch(
 // it; see components/ResultHeader.vue, ResultStatRow.vue, ResultFooter.vue,
 // and Board.vue's `masksOverride` prop.
 
-const bestRecord = computed(() => (puzzle.value.puzzleNumber != null ? getBestForPuzzle(puzzle.value.puzzleNumber) : undefined));
+const bestRecord = computed(() => {
+  resultVersion.value; // re-derive whenever a new round's result is recorded -- see activateResult() above
+  return puzzle.value.puzzleNumber != null ? getBestForPuzzle(puzzle.value.puzzleNumber) : undefined;
+});
 
 const thisGameRecord = computed(() => ({
   overPar: game.value.overPar,
@@ -248,10 +272,7 @@ onBeforeUnmount(() => {
          screen in thumb-reach, no matter how tall the rest of this ends
          up being. -->
     <div class="play-content">
-      <p class="puzzle-line">
-        <template v-if="formattedDate">{{ formattedDate }} &middot; </template>
-        {{ puzzle.label }}
-      </p>
+      <p v-if="formattedDate" class="puzzle-line">{{ formattedDate }}</p>
 
       <div ref="resultGroupRef" class="result-group" :class="{ 'with-divider': showResult }">
         <div class="game-area">
@@ -261,19 +282,24 @@ onBeforeUnmount(() => {
             :record="displayedTier"
             :over-par="displayedRecord.overPar"
             :formatted-date="formattedDate"
-            :revealed="reveal.rankRevealed"
+            :revealed="viewMode === 'best' || reveal.rankRevealed"
           />
 
           <Board
             :game="game"
             :compact="showResult"
             :masks-override="viewMode === 'best' ? displayedRecord.masks : null"
-            :pulsing-index="reveal.pulsingHoleIndex"
+            :pulsing-index="viewMode === 'this' ? reveal.pulsingHoleIndex : -1"
           />
         </div>
 
-        <template v-if="showResult">
-          <ResultToggle v-if="puzzle.puzzleNumber != null" v-model="viewMode" />
+        <!-- A single fade+scale entrance for everything that appears once
+             the round ends -- deliberately NOT wrapping .game-area above,
+             since Board.vue stays the same persistent element throughout
+             (see its `compact` prop) and must never itself flicker
+             opacity:0 as part of this. -->
+        <div v-if="showResult" class="result-extras">
+          <ResultToggle v-if="puzzle.puzzleNumber != null" :model-value="viewMode" @update:model-value="handleViewModeChange" />
           <ResultStatRow
             :par="game.par"
             :pegs-remaining="displayedRecord.pegsRemaining"
@@ -290,7 +316,7 @@ onBeforeUnmount(() => {
             :result-source="viewMode"
             @reset="game.reset()"
           />
-        </template>
+        </div>
       </div>
 
       <TemporaryWatchSolveButton v-if="isDevBuild" :game="game" />
@@ -352,6 +378,37 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 16px;
   width: 100%;
+}
+
+.result-extras {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  /* A one-shot "something just happened" entrance for the toggle/stats/
+     footer row -- the equivalent of the now-retired ResultOverlay.vue's
+     whole-modal fade+scale-in, scoped to just this new content so the
+     persistent Board element above (see its `compact` prop) never itself
+     flickers through opacity:0 as part of it. */
+  animation: result-extras-enter 0.35s ease-out;
+}
+
+@keyframes result-extras-enter {
+  0% {
+    opacity: 0;
+    transform: translateY(10px) scale(0.97);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .result-extras {
+    animation: none;
+  }
 }
 
 /* Once the round is over, this whole group (header/board through the
