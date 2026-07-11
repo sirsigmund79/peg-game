@@ -28,7 +28,7 @@ const props = defineProps({
 const shyMessage = computed(() => {
   const n = props.overPar;
   if (n <= 0) return null; // Genius -- nothing to be shy about
-  return n <= 2 ? `${n} dot${n === 1 ? '' : 's'} shy of Genius — so close!` : `${n} dots shy of Genius`;
+  return n <= 2 ? `${n} dot${n === 1 ? '' : 's'} shy of Genius. So close!` : `${n} dots shy of Genius`;
 });
 </script>
 
