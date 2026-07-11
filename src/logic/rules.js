@@ -179,10 +179,13 @@ export function countPegsRemaining(masks) {
  * chain of if-statements) for easy scanning/testing.
  *
  * `size` is the rank title's font size on the result screen -- de-emphasizes
- * the lower tiers so GENIUS stays the one hero-sized moment.
+ * the lower tiers so GENIUS stays the one hero-sized moment. The bottom two
+ * tiers share the same size: "Warming Up" isn't the embarrassing joke the
+ * old bottom-tier copy was, so it doesn't need to read any smaller than
+ * "Not bad".
  */
 export const RANK_TIERS = [
-  { overPar: null, rank: 'Eg-no-ra-moose', emoji: '', size: '1.05rem' },
+  { overPar: null, rank: 'Warming Up', emoji: '', size: '1.25rem' },
   { overPar: 2, rank: 'Not bad', emoji: '', size: '1.25rem' },
   { overPar: 1, rank: 'Purty smart', emoji: '', size: '1.55rem' },
   { overPar: 0, rank: 'Genius', emoji: '🧠', size: '1.9rem' },

@@ -2,7 +2,7 @@
   ============================================================================
   components/ResultHeader.vue
   ----------------------------------------------------------------------------
-  The result screen's header: the rank ("Genius", "Eg-no-ra-moose", ...),
+  The result screen's header: the rank ("Genius", "Warming Up", ...),
   sized by tier (Genius stays the hero moment, lower tiers are progressively
   de-emphasized -- see logic/rules.js's RANK_TIERS), a small "N dots shy of
   Genius" callout for any non-Genius result, and the puzzle's date underneath.
