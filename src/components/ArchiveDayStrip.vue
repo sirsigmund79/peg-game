@@ -28,8 +28,12 @@
   waitForScrollSettle) only brings that screen into view -- it fires before
   this strip even mounts, so on a short screen the strip can still land
   below the fold. Once mounted, this scrolls itself the rest of the way
-  into view so a player never has to scroll manually just to see the
-  archive callout exists.
+  down, capped by the `keepVisibleEl` prop (the result card's root, passed
+  from components/PlayView.vue) so the scroll never pushes that card's own
+  top -- where the rank sits -- above the viewport. On a screen too short
+  to fit both the whole result card and this whole strip, the rank wins;
+  the strip may still end up partly below the fold, same as before this
+  clamp existed, rather than trading one cut-off element for another.
   ============================================================================
 -->
 <script setup>
@@ -43,6 +47,16 @@ import PuzzleGlyph from './PuzzleGlyph.vue';
 
 const RECENT_DAY_COUNT = 3;
 
+const props = defineProps({
+  // The result card's root element (see PlayView.vue's `resultGroupRef`) --
+  // its top edge (where the rank sits) is never scrolled above the
+  // viewport's top by the reveal-into-view below.
+  keepVisibleEl: {
+    type: Object,
+    default: null,
+  },
+});
+
 const { navigate } = useRouter();
 const todayNumber = getTodayPuzzleNumber();
 const history = getHistory();
@@ -50,8 +64,31 @@ const history = getHistory();
 const stripRef = ref(null);
 const prefersReducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
+// A small top margin (rather than 0) so the rank doesn't end up scrolled
+// flush against the very edge of the viewport.
+const KEEP_VISIBLE_TOP_MARGIN_PX = 12;
+
 onMounted(() => {
-  stripRef.value?.scrollIntoView({ behavior: prefersReducedMotion ? 'auto' : 'smooth', block: 'end' });
+  const strip = stripRef.value;
+  if (!strip) return;
+
+  const stripRect = strip.getBoundingClientRect();
+  // How far down we'd need to scroll to bring the strip's bottom fully
+  // into view (0 if it's already on screen) -- the same amount
+  // `scrollIntoView({block: 'end'})` would scroll by.
+  const wantedScroll = Math.max(0, stripRect.bottom - window.innerHeight);
+  if (wantedScroll === 0) return;
+
+  const keepVisibleRect = props.keepVisibleEl?.getBoundingClientRect();
+  // Never scroll further than the point where the keep-visible element's
+  // own top would be pushed above the margin -- if it's already past that
+  // point (a very short screen), don't scroll at all rather than push it
+  // further off.
+  const maxScroll = keepVisibleRect ? Math.max(0, keepVisibleRect.top - KEEP_VISIBLE_TOP_MARGIN_PX) : wantedScroll;
+  const scrollAmount = Math.min(wantedScroll, maxScroll);
+  if (scrollAmount <= 0) return;
+
+  window.scrollBy({ top: scrollAmount, behavior: prefersReducedMotion ? 'auto' : 'smooth' });
 });
 
 const recentDays = computed(() => {

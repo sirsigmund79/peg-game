@@ -18,7 +18,7 @@
 // `pulsingIndex` prop, which this composable's `pulsingHoleIndex` drives).
 // ============================================================================
 
-import { onBeforeUnmount, ref } from 'vue';
+import { onBeforeUnmount, reactive, ref } from 'vue';
 import { computeDisplayPositions } from '../logic/boardLayout.js';
 import { getColorAt } from '../logic/rules.js';
 
@@ -147,5 +147,12 @@ export function useResultReveal() {
 
   onBeforeUnmount(cancel);
 
-  return { rankRevealed, displayedScore, scoreBumpKeys, pulsingHoleIndex, start, cancel, finishNow };
+  // Wrapped in reactive() so callers can read/pass these through plain
+  // `reveal.rankRevealed`-style property access (in templates AND script,
+  // e.g. PlayView.vue) and always see the unwrapped current value -- a
+  // plain object literal of refs only auto-unwraps for template bindings
+  // referenced by their own top-level name, not for nested member access
+  // like `reveal.pulsingHoleIndex`, which would otherwise hand callers the
+  // Ref object itself instead of the number/boolean/array it holds.
+  return reactive({ rankRevealed, displayedScore, scoreBumpKeys, pulsingHoleIndex, start, cancel, finishNow });
 }
