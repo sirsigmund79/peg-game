@@ -145,6 +145,23 @@ export function useResultReveal() {
     rankRevealed.value = true;
   }
 
+  /**
+   * Shows the fully-revealed state directly, with no reveal ever having
+   * played -- used when components/PlayView.vue restores a round that
+   * finished in an earlier visit (see logic/roundState.js). Unlike
+   * finishNow() (which fast-forwards a walk that's already in flight from a
+   * prior start() call), there's no scroll-into-view or peg-walk to skip
+   * here; the result screen should simply already look done.
+   *
+   * @param {number[]} pegsRemaining - final per-color peg counts
+   */
+  function showImmediately(pegsRemaining) {
+    cancel();
+    displayedScore.value = [...pegsRemaining];
+    pulsingHoleIndex.value = -1;
+    rankRevealed.value = true;
+  }
+
   onBeforeUnmount(cancel);
 
   // Wrapped in reactive() so callers can read/pass these through plain
@@ -154,5 +171,5 @@ export function useResultReveal() {
   // referenced by their own top-level name, not for nested member access
   // like `reveal.pulsingHoleIndex`, which would otherwise hand callers the
   // Ref object itself instead of the number/boolean/array it holds.
-  return reactive({ rankRevealed, displayedScore, scoreBumpKeys, pulsingHoleIndex, start, cancel, finishNow });
+  return reactive({ rankRevealed, displayedScore, scoreBumpKeys, pulsingHoleIndex, start, cancel, finishNow, showImmediately });
 }

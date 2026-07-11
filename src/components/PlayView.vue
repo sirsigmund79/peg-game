@@ -176,6 +176,25 @@ function clearResultHold() {
 // puzzle itself changes.
 const resultVersion = ref(0);
 
+/**
+ * If `game` was just created already sitting on a round that finished in an
+ * earlier visit (see useGame.js's `restoredFinished`, backed by
+ * logic/roundState.js), jump straight to the result screen -- fully
+ * revealed, no reveal animation, no RESULT_HOLD_MS delay -- since nothing
+ * "just happened" here; the player is simply returning to a puzzle they
+ * already solved.
+ */
+function applyRestoredResultIfAny() {
+  if (!game.value.restoredFinished) return;
+  resultVersion.value += 1;
+  showResult.value = true;
+  viewMode.value = 'this';
+  showArchiveStrip.value = true;
+  reveal.showImmediately(game.value.pegsRemaining);
+}
+
+applyRestoredResultIfAny();
+
 function activateResult() {
   resultVersion.value += 1;
   showResult.value = true;
@@ -240,6 +259,7 @@ watch(
     showArchiveStrip.value = false;
     puzzle.value = resolvePuzzle();
     game.value = useGame(puzzle.value, { source: resolveSource() });
+    applyRestoredResultIfAny();
   }
 );
 

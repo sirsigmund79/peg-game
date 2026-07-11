@@ -27,6 +27,7 @@ import { vibrateJump, vibrateRoundOver } from '../fx/haptics.js';
 import { playSound, playRoundOverChime, soundState } from '../fx/sound.js';
 import { recordResult, getResultForPuzzle } from '../logic/history.js';
 import { recordBestIfBetter } from '../logic/bestResults.js';
+import { getFinishedMasks, recordRoundFinished, clearRoundFinished } from '../logic/roundState.js';
 import { EVENTS, track, syncPlayerStatsToPostHog } from '../services/analytics.js';
 
 function sum(numbers) {
@@ -46,12 +47,18 @@ export function useGame(puzzle, options = {}) {
   const startingMasks = createStartingMasks(puzzle.cellCount, puzzle.holeColors, puzzle.colorCount);
   const source = options.source ?? 'daily';
 
+  // If this puzzle's last round finished and hasn't been Reset since (see
+  // logic/roundState.js), resume showing that exact board instead of the
+  // starting position -- see the `restoredFinished` flag below, which
+  // components/PlayView.vue uses to jump straight to the result screen.
+  const restoredMasks = puzzle.puzzleNumber != null ? getFinishedMasks(puzzle.puzzleNumber) : undefined;
+
   // `state` is the one reactive object every other function below reads
   // from and writes to. Because it's created with Vue's reactive(), any
   // Vue component that reads these values will automatically re-render
   // when they change -- no manual "update the screen" code needed.
   const state = reactive({
-    masks: startingMasks, // which holes currently have a peg, one bigint bitmask per color
+    masks: restoredMasks ?? startingMasks, // which holes currently have a peg, one bigint bitmask per color
     selectedHole: null, // index of the peg the player has tapped, or null
     undoStack: [], // previous masks arrays, so Undo can step backward
     moveCount: 0,
@@ -212,6 +219,7 @@ export function useGame(puzzle, options = {}) {
       if (puzzle.puzzleNumber !== null) {
         recordResult(puzzle.puzzleNumber, { pegsRemaining: finalPegsRemaining, overPar: overParAtEnd, won });
         recordBestIfBetter(puzzle.puzzleNumber, { pegsRemaining: finalPegsRemaining, overPar: overParAtEnd, won, masks: state.masks });
+        recordRoundFinished(puzzle.puzzleNumber, state.masks);
         syncPlayerStatsToPostHog();
       }
       track(EVENTS.PUZZLE_COMPLETED, {
@@ -252,6 +260,10 @@ export function useGame(puzzle, options = {}) {
       track(EVENTS.PUZZLE_RESET_USED, { puzzle_number: puzzle.puzzleNumber ?? null, move_count_before_reset: state.moveCount });
       state.resetCount += 1;
     }
+    // Explicit reset is the one signal that the next time this puzzle
+    // loads, it should start fresh rather than resuming the result screen
+    // -- see logic/roundState.js.
+    if (puzzle.puzzleNumber != null) clearRoundFinished(puzzle.puzzleNumber);
     state.masks = startingMasks;
     state.selectedHole = null;
     state.lastMove = null;
@@ -276,6 +288,12 @@ export function useGame(puzzle, options = {}) {
     rank,
     validMoves,
     validTargetHoles,
+    // True when this instance was created already sitting on a finished
+    // round restored from logic/roundState.js, rather than having finished
+    // during this instance's lifetime -- components/PlayView.vue uses this
+    // to jump straight to the result screen without replaying its reveal
+    // animation. Fixed at creation time, not reactive to later resets.
+    restoredFinished: restoredMasks !== undefined,
     holeHasPeg,
     getHoleColor,
     selectHole,
