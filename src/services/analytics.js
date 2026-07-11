@@ -59,6 +59,12 @@ export function initAnalytics() {
     // PostHog toolbar. No dashboard in docs/ANALYTICS.md depends on it --
     // every dashboard is built from the named events below.
     autocapture: true,
+    // Session replay. This flag just stops the SDK itself from opting out --
+    // recording only actually starts once "Record user sessions" is turned
+    // on for the project in the PostHog dashboard (Project Settings ->
+    // Recordings), which is a separate, account-level switch this code
+    // can't reach.
+    disable_session_recording: false,
   });
 
   // Lets every dashboard filter dev traffic out even if the user only ever
