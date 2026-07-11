@@ -14,8 +14,9 @@
 // ============================================================================
 
 // A loud, saturated "printed activity-book" palette, re-skinned around a
-// moose/forest identity (a nod to the "Eg-no-ra-moose" loss copy in
-// logic/rules.js) -- warm birch-bark cream pages, a bold pine-green
+// moose/forest identity (a nod to the bottom-tier rank's original
+// "Eg-no-ra-moose" copy in logic/rules.js, since renamed to "Warming Up")
+// -- warm birch-bark cream pages, a bold pine-green
 // masthead, and an antler/harvest-amber board tray. Thick bark-brown
 // borders and hard offset drop-shadows give it a "sticker" poster look.
 const MOOSE_THEME = {
