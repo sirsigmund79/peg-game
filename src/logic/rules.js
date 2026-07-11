@@ -185,7 +185,7 @@ export const RANK_TIERS = [
   { overPar: null, rank: 'Eg-no-ra-moose', emoji: '', size: '1.05rem' },
   { overPar: 2, rank: 'Not bad', emoji: '', size: '1.25rem' },
   { overPar: 1, rank: 'Purty smart', emoji: '', size: '1.55rem' },
-  { overPar: 0, rank: 'GENIUS', emoji: '🧠', size: '1.9rem' },
+  { overPar: 0, rank: 'Genius', emoji: '🧠', size: '1.9rem' },
 ];
 
 /**

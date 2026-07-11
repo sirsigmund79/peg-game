@@ -307,7 +307,7 @@ onBeforeUnmount(() => {
           <Board
             :game="game"
             :compact="showResult"
-            :masks-override="viewMode === 'best' ? displayedRecord.masks : null"
+            :masks-override="showResult && viewMode === 'best' ? displayedRecord.masks : null"
             :pulsing-index="viewMode === 'this' ? reveal.pulsingHoleIndex : -1"
           />
         </div>
