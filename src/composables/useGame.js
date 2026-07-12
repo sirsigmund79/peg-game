@@ -28,6 +28,8 @@ import { playSound, playRoundOverChime, soundState } from '../fx/sound.js';
 import { recordResult, getResultForPuzzle } from '../logic/history.js';
 import { recordBestIfBetter } from '../logic/bestResults.js';
 import { getFinishedMasks, recordRoundFinished, clearRoundFinished } from '../logic/roundState.js';
+import { recordPegCleared, recordPlaythroughEnded, recordGiveUpReset, recordGeniusReached } from '../logic/badgeStats.js';
+import { isGiveUpReset } from '../logic/attemptBoundary.js';
 import { EVENTS, track, syncPlayerStatsToPostHog } from '../services/analytics.js';
 
 function sum(numbers) {
@@ -75,6 +77,12 @@ export function useGame(puzzle, options = {}) {
     roundStartedAt: Date.now(),
     firstMoveTracked: false,
     incompleteReported: false,
+    // Badge-stat bookkeeping only (see logic/badgeStats.js's Clean Genius
+    // check) -- Undo count for the CURRENT attempt specifically. Unlike
+    // undoCount above (which analytics never resets across a reset() within
+    // one session -- see the note in reset() below), this one always starts
+    // back at 0 for a fresh attempt.
+    attemptUndoCount: 0,
   });
 
   track(EVENTS.PUZZLE_STARTED, {
@@ -187,8 +195,12 @@ export function useGame(puzzle, options = {}) {
    * @param {{from:number, over:number, to:number}} move
    */
   function jump(move) {
+    // Read the jumped-over peg's color BEFORE applying the move -- once
+    // applyMove() removes it, there's nothing left at `move.over` to ask.
+    const clearedColor = getColorAt(state.masks, move.over);
     state.undoStack.push(state.masks);
     state.masks = applyMove(state.masks, move);
+    if (puzzle.puzzleNumber !== null) recordPegCleared(clearedColor);
     state.moveCount += 1;
     state.selectedHole = null;
     state.lastMove = move;
@@ -221,6 +233,13 @@ export function useGame(puzzle, options = {}) {
         recordBestIfBetter(puzzle.puzzleNumber, { pegsRemaining: finalPegsRemaining, overPar: overParAtEnd, won, masks: state.masks });
         recordRoundFinished(puzzle.puzzleNumber, state.masks);
         syncPlayerStatsToPostHog();
+
+        // Reaching a terminal state always ends the current attempt -- see
+        // logic/attemptBoundary.js for how this differs from Reset.
+        recordPlaythroughEnded(puzzle.puzzleNumber);
+        if (getRankForOverPar(overParAtEnd).rank === 'Genius') {
+          recordGeniusReached(puzzle.puzzleNumber, { attemptUndoCount: state.attemptUndoCount });
+        }
       }
       track(EVENTS.PUZZLE_COMPLETED, {
         puzzle_number: puzzle.puzzleNumber ?? null,
@@ -244,6 +263,7 @@ export function useGame(puzzle, options = {}) {
     if (state.undoStack.length === 0) return;
     track(EVENTS.PUZZLE_UNDO_USED, { puzzle_number: puzzle.puzzleNumber ?? null, move_count_before_undo: state.moveCount });
     state.undoCount += 1;
+    state.attemptUndoCount += 1;
     state.masks = state.undoStack.pop();
     state.moveCount = Math.max(0, state.moveCount - 1);
     state.selectedHole = null;
@@ -253,6 +273,12 @@ export function useGame(puzzle, options = {}) {
 
   /** Resets the board back to the puzzle's starting position. */
   function reset() {
+    // Read BEFORE anything below mutates state -- this is the one signal
+    // that tells apart the two Reset entry points in the UI (see
+    // logic/attemptBoundary.js): Controls' Reset (round still live -- a
+    // give-up) vs. ResultFooter's "play again" Reset (round already over).
+    const roundOverBeforeReset = roundOver.value;
+
     // A reset before any move has been made isn't a meaningful "the player
     // is frustrated" signal -- it's just clearing an idle selection, or a
     // stray tap. Only worth recording once there was actual progress to give up.
@@ -260,6 +286,15 @@ export function useGame(puzzle, options = {}) {
       track(EVENTS.PUZZLE_RESET_USED, { puzzle_number: puzzle.puzzleNumber ?? null, move_count_before_reset: state.moveCount });
       state.resetCount += 1;
     }
+
+    // A give-up Reset ends the current attempt -- a "play again" Reset
+    // after the round already ended does not (that attempt was already
+    // recorded as a playthrough the moment it hit its terminal state).
+    if (puzzle.puzzleNumber !== null && isGiveUpReset({ roundOverBeforeReset, moveCount: state.moveCount })) {
+      recordGiveUpReset(puzzle.puzzleNumber);
+      recordPlaythroughEnded(puzzle.puzzleNumber);
+    }
+
     // Explicit reset is the one signal that the next time this puzzle
     // loads, it should start fresh rather than resuming the result screen
     // -- see logic/roundState.js.
@@ -269,6 +304,7 @@ export function useGame(puzzle, options = {}) {
     state.lastMove = null;
     state.undoStack = [];
     state.moveCount = 0;
+    state.attemptUndoCount = 0;
     state.roundStartedAt = Date.now();
   }
 

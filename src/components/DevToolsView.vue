@@ -28,6 +28,7 @@ import { useRouter } from '../composables/useRouter.js';
 import { pendingCustomPuzzle } from '../composables/usePendingPuzzle.js';
 import DevPanel from './DevPanel.vue';
 import SoundDevPanel from './SoundDevPanel.vue';
+import BadgeStatsDevPanel from './BadgeStatsDevPanel.vue';
 import EditorView from './EditorView.vue';
 
 const { navigate } = useRouter();
@@ -50,6 +51,7 @@ function handlePlayCustomPuzzle(customPuzzle) {
   <div class="dev-tools-view">
     <DevPanel :current-puzzle="devPuzzle" @load-puzzle-number="handleLoadPuzzleNumber" />
     <SoundDevPanel />
+    <BadgeStatsDevPanel />
     <EditorView @play-puzzle="handlePlayCustomPuzzle" />
   </div>
 </template>
