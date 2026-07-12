@@ -56,7 +56,7 @@ centralizes sharing. Two ground rules shaped what's here:
 | `puzzle_reset_used` | Reset pressed after ≥1 move | `puzzle_number`, `move_count_before_reset` |
 | `puzzle_completed` | Round ends, any outcome | `puzzle_number`, `puzzle_date`, `board_shape`, `color_count`, `won`, `rank`, `over_par`, `move_count`, `undo_count`, `reset_count`, `duration_ms`, `source` |
 | `puzzle_left_incomplete` | Player leaves mid-round (route away, tab hidden, or tab closed) — fires once per round | `puzzle_number`, `move_count`, `time_spent_ms` |
-| `share_clicked` | "Share Score" tapped | `puzzle_number`, `rank`, `won`, `over_par` |
+| `share_clicked` | "Challenge A Friend" tapped | `puzzle_number`, `rank`, `won`, `over_par` |
 | `share_copy_result` | Clipboard copy resolves | `puzzle_number`, `success` |
 | `archive_puzzle_selected` | A day picked from the archive | `puzzle_number`, `days_ago`, `already_played`, `is_today` |
 | `sound_toggled` | Mute/unmute pressed | `muted` |
@@ -215,7 +215,7 @@ difference — with small daily numbers, that means running for **weeks**,
 not days. Don't call a winner off a few days of data; let PostHog's built-in
 significance calculation actually clear before deciding.
 
-1. **Share CTA copy/design** — vary the "Share Score 📋" button's copy or
+1. **Share CTA copy/design** — vary the "Challenge A Friend 💬" button's copy or
    emphasis. *Hypothesis:* clearer/more enticing copy increases the share
    rate. *Primary metric:* `share_clicked` ÷ `puzzle_completed`.
    *Secondary:* downstream `ref=share` visit volume (Dashboard 4). No new

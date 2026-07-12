@@ -3,11 +3,12 @@
 // ----------------------------------------------------------------------------
 // Everything related to sharing a result lives here: building the short,
 // spoiler-safe emoji summary, and copying it to the clipboard. Never
-// reveals the actual moves -- just a colored circle per peg color and how
-// many of that color were left, plus the puzzle's date and a direct link
-// back to that exact day (see logic/daily.js -- "#/play/<puzzleNumber>"
-// loads that specific day regardless of what "today" is when it's opened),
-// so sharing an archive day sends people to that day, not just today's.
+// reveals the actual moves -- just a challenge line, the puzzle's date, a
+// colored circle per peg color for how many of that color were left, and a
+// direct link back to that exact day (see logic/daily.js --
+// "#/play/<puzzleNumber>" loads that specific day regardless of what
+// "today" is when it's opened), so sharing an archive day sends people to
+// that day, not just today's.
 //
 // No Vue code lives here -- ResultFooter.vue calls these plain functions
 // and just displays whatever comes back.
@@ -20,33 +21,35 @@ export const SITE_URL = 'https://dot-hop.pages.dev/';
 
 /**
  * Builds the short, spoiler-safe text people post when they share a result
- * -- the puzzle's date, one row per peg color with that color's circle
- * emoji repeated once per surviving peg (in color order, colors with none
- * left omitted), the rank that result earned, and a link straight to that
- * day's puzzle.
+ * -- a one-line challenge naming the rank that result earned, the puzzle's
+ * date, one row per peg color with that color's circle emoji repeated once
+ * per surviving peg (in color order, colors with none left omitted), and a
+ * link straight to that day's puzzle.
  *
  * @param {object} params
  * @param {number[]} params.pegsRemaining - final per-color peg counts, color-index order
  * @param {number|null} [params.puzzleNumber] - the day's puzzle number (see logic/daily.js); omitted/null for a one-off custom design, which has no day to link to
  * @param {string|null} [params.formattedDate] - the puzzle's date, already formatted for display (see PlayView.vue's formattedDate); omitted/null for a custom design
  * @param {string|null} [params.rank] - the rank copy earned by this result (see logic/rules.js's getRankForOverPar); omitted/null to leave it out
- * @param {string|null} [params.emoji] - that rank's emoji, if it has one
  * @returns {string}
  */
-export function buildShareText({ pegsRemaining, puzzleNumber = null, formattedDate = null, rank = null, emoji = null }) {
+export function buildShareText({ pegsRemaining, puzzleNumber = null, formattedDate = null, rank = null }) {
   const emojiLines = pegsRemaining
     .map((count, colorIndex) => getPegColor(colorIndex).emoji.repeat(count))
     .filter((row) => row.length > 0)
     .join('\n');
+  // Genius is the top rank -- there's no better result left to beat, so the
+  // challenge reads differently than every other rank (see logic/rules.js's
+  // RANK_TIERS).
+  const challengeLine = rank ? (rank === 'Genius' ? 'I got Genius. Can you?\n' : `I got ${rank}. Can you beat it?\n`) : '';
   const dateLine = formattedDate ? `Dot Hop — ${formattedDate}\n` : '';
-  const rankLine = rank ? `${emoji ? emoji + ' ' : ''}${rank}\n` : '';
   // The `?ref=share` marker doesn't reveal anything spoiler-y -- it's the
   // only way to tell a session arriving from a shared result apart from any
   // other visit, since PostHog auto-captures $current_url/$referrer but has
   // no other way to know a link came from this button. See the Virality
   // dashboard in docs/ANALYTICS.md.
   const link = puzzleNumber === null ? `${SITE_URL}?ref=share` : `${SITE_URL}?ref=share#/play/${puzzleNumber}`;
-  return `${dateLine}${emojiLines}\n${rankLine}${link}`;
+  return `${challengeLine}${dateLine}${emojiLines}\n${link}`;
 }
 
 /**

@@ -296,7 +296,6 @@ const shareText = computed(() =>
     puzzleNumber: puzzle.value.puzzleNumber,
     formattedDate: formattedDate.value,
     rank: displayedTier.value.rank,
-    emoji: displayedTier.value.emoji,
   })
 );
 
