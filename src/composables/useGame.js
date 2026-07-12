@@ -30,6 +30,7 @@ import { recordBestIfBetter } from '../logic/bestResults.js';
 import { getFinishedMasks, recordRoundFinished, clearRoundFinished } from '../logic/roundState.js';
 import { recordPegCleared, recordPlaythroughEnded, recordGiveUpReset, recordGeniusReached } from '../logic/badgeStats.js';
 import { isGiveUpReset } from '../logic/attemptBoundary.js';
+import { checkForNewlyUnlockedBadges } from '../logic/badgeUnlocks.js';
 import { EVENTS, track, syncPlayerStatsToPostHog } from '../services/analytics.js';
 
 function sum(numbers) {
@@ -240,6 +241,7 @@ export function useGame(puzzle, options = {}) {
         if (getRankForOverPar(overParAtEnd).rank === 'Genius') {
           recordGeniusReached(puzzle.puzzleNumber, { attemptUndoCount: state.attemptUndoCount });
         }
+        checkForNewlyUnlockedBadges(puzzle.puzzleNumber);
       }
       track(EVENTS.PUZZLE_COMPLETED, {
         puzzle_number: puzzle.puzzleNumber ?? null,
@@ -293,6 +295,7 @@ export function useGame(puzzle, options = {}) {
     if (puzzle.puzzleNumber !== null && isGiveUpReset({ roundOverBeforeReset, moveCount: state.moveCount })) {
       recordGiveUpReset(puzzle.puzzleNumber);
       recordPlaythroughEnded(puzzle.puzzleNumber);
+      checkForNewlyUnlockedBadges(puzzle.puzzleNumber);
     }
 
     // Explicit reset is the one signal that the next time this puzzle

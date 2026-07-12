@@ -31,6 +31,7 @@ export const EVENTS = {
   ARCHIVE_TEASER_DAY_SELECTED: 'archive_teaser_day_selected',
   ARCHIVE_TEASER_EXPLORE_CLICKED: 'archive_teaser_explore_clicked',
   SOUND_TOGGLED: 'sound_toggled',
+  BADGE_UNLOCKED: 'badge_unlocked',
 };
 
 let isInitialized = false;
