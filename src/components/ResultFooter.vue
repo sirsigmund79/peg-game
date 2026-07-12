@@ -2,7 +2,7 @@
   ============================================================================
   components/ResultFooter.vue
   ----------------------------------------------------------------------------
-  "Share Score" and "Reset", side by side, lifted out of the now-retired
+  "Challenge A Friend" and "Reset", side by side, lifted out of the now-retired
   ResultOverlay.vue. Share always copies a spoiler-safe result line (built
   by the caller via services/viral.js -- see the `shareText` prop, sourced
   from whichever result record components/PlayView.vue's This game/Best
@@ -52,7 +52,7 @@ async function handleShareClick() {
 <template>
   <footer class="result-footer">
     <div class="result-actions">
-      <button type="button" class="share-button" @click="handleShareClick">Share Score 📋</button>
+      <button type="button" class="share-button" @click="handleShareClick">Challenge A Friend 💬</button>
       <button type="button" class="reset-button" @click="$emit('reset')">Reset</button>
     </div>
     <p v-if="shareStatusMessage" class="share-status" role="status">{{ shareStatusMessage }}</p>
@@ -66,7 +66,7 @@ async function handleShareClick() {
   gap: 10px;
 }
 
-/* Share Score and Reset sit side by side on the result screen, styled
+/* Challenge A Friend and Reset sit side by side on the result screen, styled
    differently from each other so they read as "the main thing" (share,
    solid-filled) vs. "the other option" (reset, outlined) -- the same
    solid/outline pairing components/Controls.vue uses for Reset/Undo during
