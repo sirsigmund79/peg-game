@@ -142,6 +142,11 @@ const showResult = ref(false);
 // bringing the archive strip in this early doesn't shift anything out from
 // under the still-playing reveal.
 const showArchiveStrip = ref(false);
+// Bound to `.result-anchor` below, which wraps BOTH `.puzzle-line` (the
+// date) and `.result-group` (rank/board/stats) -- so the reveal's
+// scroll-into-view (see activateResult() below) and ArchiveDayStrip.vue's
+// own supplementary scroll-down (its `keepVisibleEl` prop) both treat the
+// date as part of what must stay on screen, not just the rank underneath it.
 const resultGroupRef = ref(null);
 const reveal = useResultReveal();
 
@@ -311,50 +316,66 @@ onBeforeUnmount(() => {
          screen in thumb-reach, no matter how tall the rest of this ends
          up being. -->
     <div class="play-content">
-      <p v-if="formattedDate" class="puzzle-line">{{ formattedDate }}</p>
+      <!-- Wraps the date together with the result card so the reveal's
+           scroll-into-view and ArchiveDayStrip.vue's supplementary scroll
+           (see resultGroupRef above) both treat the date as part of what
+           must stay on screen, not just the card underneath it. -->
+      <div ref="resultGroupRef" class="result-anchor">
+        <p v-if="formattedDate" class="puzzle-line">{{ formattedDate }}</p>
 
-      <div ref="resultGroupRef" class="result-group" :class="{ 'with-divider': showResult }">
-        <div class="game-area">
-          <StatBar v-if="!showResult" :pegs-remaining="game.pegsRemaining" :move-count="game.state.moveCount" :par="game.par" />
-          <ResultHeader
-            v-else
-            :record="displayedTier"
-            :over-par="displayedRecord.overPar"
-            :formatted-date="formattedDate"
-            :revealed="viewMode === 'best' || reveal.rankRevealed"
-          />
+        <div class="result-group" :class="{ 'with-divider': showResult }">
+          <div class="game-area">
+            <StatBar v-if="!showResult" :pegs-remaining="game.pegsRemaining" :move-count="game.state.moveCount" :par="game.par" />
+            <ResultHeader
+              v-else
+              :record="displayedTier"
+              :over-par="displayedRecord.overPar"
+              :revealed="viewMode === 'best' || reveal.rankRevealed"
+            />
 
-          <Board
-            :game="game"
-            :compact="showResult"
-            :masks-override="showResult && viewMode === 'best' ? displayedRecord.masks : null"
-            :pulsing-index="viewMode === 'this' ? reveal.pulsingHoleIndex : -1"
-          />
-        </div>
+            <!-- Sits directly below the rank/shy-pill and above the board --
+                 same zone as the rank reveal, so the score count-up (see
+                 composables/useResultReveal.js) and the rank pop-in read as
+                 one connected moment instead of making a player's eyes jump
+                 down past the board and back. Appears the instant
+                 `showResult` flips true, same as ResultHeader right above it
+                 -- no separate fade-in shell of its own. -->
+            <ResultStatRow
+              v-if="showResult"
+              :par="game.par"
+              :pegs-remaining="displayedRecord.pegsRemaining"
+              :displayed-score="reveal.displayedScore"
+              :score-bump-keys="reveal.scoreBumpKeys"
+              :is-revealing="viewMode === 'this' && !reveal.rankRevealed"
+            />
 
-        <!-- A single fade+scale entrance for everything that appears once
-             the round ends -- deliberately NOT wrapping .game-area above,
-             since Board.vue stays the same persistent element throughout
-             (see its `compact` prop) and must never itself flicker
-             opacity:0 as part of this. -->
-        <div v-if="showResult" class="result-extras">
-          <ResultToggle v-if="puzzle.puzzleNumber != null" :model-value="viewMode" @update:model-value="handleViewModeChange" />
-          <ResultStatRow
-            :par="game.par"
-            :pegs-remaining="displayedRecord.pegsRemaining"
-            :displayed-score="reveal.displayedScore"
-            :score-bump-keys="reveal.scoreBumpKeys"
-            :is-revealing="viewMode === 'this' && !reveal.rankRevealed"
-          />
-          <ResultFooter
-            :share-text="shareText"
-            :puzzle-number="puzzle.puzzleNumber"
-            :rank="displayedTier.rank"
-            :won="displayedRecord.won"
-            :over-par="displayedRecord.overPar"
-            :result-source="viewMode"
-            @reset="game.reset()"
-          />
+            <Board
+              :game="game"
+              :compact="showResult"
+              :masks-override="showResult && viewMode === 'best' ? displayedRecord.masks : null"
+              :pulsing-index="viewMode === 'this' ? reveal.pulsingHoleIndex : -1"
+            />
+          </div>
+
+          <!-- A single fade+scale entrance for the toggle/footer row that
+               appears once the round ends -- deliberately NOT wrapping
+               .game-area above, since Board.vue stays the same persistent
+               element throughout (see its `compact` prop) and must never
+               itself flicker opacity:0 as part of this. ResultStatRow now
+               lives in .game-area instead of here (see above), above the
+               board in the same zone as the rank reveal. -->
+          <div v-if="showResult" class="result-extras">
+            <ResultToggle v-if="puzzle.puzzleNumber != null" :model-value="viewMode" @update:model-value="handleViewModeChange" />
+            <ResultFooter
+              :share-text="shareText"
+              :puzzle-number="puzzle.puzzleNumber"
+              :rank="displayedTier.rank"
+              :won="displayedRecord.won"
+              :over-par="displayedRecord.overPar"
+              :result-source="viewMode"
+              @reset="game.reset()"
+            />
+          </div>
         </div>
       </div>
 
@@ -398,6 +419,18 @@ onBeforeUnmount(() => {
   text-align: center;
 }
 
+/* Wraps .puzzle-line (the date) and .result-group together -- see
+   resultGroupRef in the script above -- so the reveal's scroll-into-view
+   and ArchiveDayStrip.vue's supplementary scroll-down both keep the date on
+   screen, not just the result card underneath it. */
+.result-anchor {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+}
+
 .puzzle-line {
   margin: 0;
   font-family: var(--font-ui);
@@ -429,8 +462,8 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 16px;
   width: 100%;
-  /* A one-shot "something just happened" entrance for the toggle/stats/
-     footer row -- the equivalent of the now-retired ResultOverlay.vue's
+  /* A one-shot "something just happened" entrance for the toggle/footer
+     row -- the equivalent of the now-retired ResultOverlay.vue's
      whole-modal fade+scale-in, scoped to just this new content so the
      persistent Board element above (see its `compact` prop) never itself
      flickers through opacity:0 as part of it. */
@@ -454,8 +487,8 @@ onBeforeUnmount(() => {
   }
 }
 
-/* Once the round is over, this whole group (header/board through the
-   toggle/stats/Share+Reset row) reads as one self-contained, screenshot-
+/* Once the round is over, this whole group (header/stats/board through the
+   toggle/Share+Reset row) reads as one self-contained, screenshot-
    able "shareable card" -- separated with real breathing room from
    ArchiveDayStrip.vue's "Catch up on recent days" strip below it, rather
    than the two visually running together. */

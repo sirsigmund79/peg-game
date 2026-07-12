@@ -4,11 +4,12 @@
   ----------------------------------------------------------------------------
   The result screen's header: the rank ("Genius", "Warming Up", ...),
   sized by tier (Genius stays the hero moment, lower tiers are progressively
-  de-emphasized -- see logic/rules.js's RANK_TIERS), a small "N dots shy of
-  Genius" callout for any non-Genius result, and the puzzle's date underneath.
-  The rank -- and the shy-of-Genius callout, which piggybacks on the same
-  flag -- stay hidden until `revealed` (see composables/useResultReveal.js)
-  turns true, then pop in together.
+  de-emphasized -- see logic/rules.js's RANK_TIERS), and a small "N dots shy
+  of Genius" callout for any non-Genius result. The rank -- and the
+  shy-of-Genius callout, which piggybacks on the same flag -- stay hidden
+  until `revealed` (see composables/useResultReveal.js) turns true, then pop
+  in together. The puzzle's date isn't repeated here -- see
+  components/PlayView.vue's `.puzzle-line`, already on screen above.
 
   Swaps out for StatBar.vue in components/PlayView.vue's `.game-area` once the
   round is over -- see PlayView.vue for why components/Board.vue itself stays
@@ -21,7 +22,6 @@ import { computed } from 'vue';
 const props = defineProps({
   record: { type: Object, required: true }, // {rank, emoji, size} -- see logic/rules.js's getRankForOverPar
   overPar: { type: Number, required: true },
-  formattedDate: { type: String, default: null },
   revealed: { type: Boolean, default: false },
 });
 
@@ -39,7 +39,6 @@ const shyMessage = computed(() => {
       {{ record.rank }}
     </p>
     <p v-if="shyMessage && revealed" class="shy-pill">{{ shyMessage }}</p>
-    <p v-if="formattedDate" class="result-date">{{ formattedDate }}</p>
   </header>
 </template>
 
@@ -106,13 +105,5 @@ const shyMessage = computed(() => {
   font-family: var(--font-ui);
   font-weight: 700;
   font-size: 0.78rem;
-}
-
-.result-date {
-  margin: 4px 0 0;
-  font-family: var(--font-ui);
-  font-weight: 600;
-  font-size: 0.78rem;
-  color: var(--color-ink-dim);
 }
 </style>
