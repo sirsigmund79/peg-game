@@ -28,12 +28,13 @@
   waitForScrollSettle) only brings that screen into view -- it fires before
   this strip even mounts, so on a short screen the strip can still land
   below the fold. Once mounted, this scrolls itself the rest of the way
-  down, capped by the `keepVisibleEl` prop (the result card's root, passed
-  from components/PlayView.vue) so the scroll never pushes that card's own
-  top -- where the rank sits -- above the viewport. On a screen too short
-  to fit both the whole result card and this whole strip, the rank wins;
-  the strip may still end up partly below the fold, same as before this
-  clamp existed, rather than trading one cut-off element for another.
+  down, capped by the `keepVisibleEl` prop (the date-plus-result-card
+  anchor, passed from components/PlayView.vue as `resultGroupRef`) so the
+  scroll never pushes that anchor's own top -- the puzzle's date -- above
+  the viewport. On a screen too short to fit both the whole result card and
+  this whole strip, the date (and the card below it) wins; the strip may
+  still end up partly below the fold, same as before this clamp existed,
+  rather than trading one cut-off element for another.
   ============================================================================
 -->
 <script setup>
@@ -48,8 +49,8 @@ import PuzzleGlyph from './PuzzleGlyph.vue';
 const RECENT_DAY_COUNT = 3;
 
 const props = defineProps({
-  // The result card's root element (see PlayView.vue's `resultGroupRef`) --
-  // its top edge (where the rank sits) is never scrolled above the
+  // The date-plus-result-card anchor (see PlayView.vue's `resultGroupRef`)
+  // -- its top edge (the puzzle's date) is never scrolled above the
   // viewport's top by the reveal-into-view below.
   keepVisibleEl: {
     type: Object,
