@@ -175,4 +175,9 @@ scripts/
   any repeat.
 - **There is no in-game hint.** The only way to recover from a bad move is
   Undo (unlimited) or Reset. (The temporary Watch Solve button is a dev
-  tool, not a player-facing hint system.)
+  tool, not a player-facing hint system.) The one deliberate, narrow
+  exception: an opt-in, off-by-default "Genius still reachable" indicator
+  (`logic/settings.js`, `composables/useReachabilityIndicator.js`) that
+  tells a player live whether their current position can still end in a
+  Genius result -- it never says which move to make, so it stays a status
+  check rather than a hint.

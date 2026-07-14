@@ -36,6 +36,7 @@ import { ref, watch, computed, onMounted, onBeforeUnmount } from 'vue';
 import { getTodaysPuzzle, getPuzzleForNumber } from '../logic/daily.js';
 import { useGame } from '../composables/useGame.js';
 import { useResultReveal } from '../composables/useResultReveal.js';
+import { useReachabilityIndicator } from '../composables/useReachabilityIndicator.js';
 import { useRouter } from '../composables/useRouter.js';
 import { pendingCustomPuzzle } from '../composables/usePendingPuzzle.js';
 import { getRankForOverPar } from '../logic/rules.js';
@@ -50,6 +51,8 @@ import ResultToggle from './ResultToggle.vue';
 import ResultStatRow from './ResultStatRow.vue';
 import ResultFooter from './ResultFooter.vue';
 import ArchiveDayStrip from './ArchiveDayStrip.vue';
+import ReachabilityBadge from './ReachabilityBadge.vue';
+import ReachabilityToggle from './ReachabilityToggle.vue';
 import TemporaryWatchSolveButton from './TemporaryWatchSolveButton.vue';
 
 const isDevBuild = import.meta.env.DEV;
@@ -81,6 +84,11 @@ function resolveSource() {
 // of the same one.
 const puzzle = ref(resolvePuzzle());
 const game = ref(useGame(puzzle.value, { source: resolveSource() }));
+
+// Owns its own worker lifecycle across puzzle changes -- see the composable
+// itself for why it's called once here (like useResultReveal() below)
+// rather than re-created inside the route watcher further down.
+const reachability = useReachabilityIndicator(puzzle, game);
 
 /**
  * Fires puzzle_left_incomplete exactly once per round, iff the player made
@@ -325,6 +333,16 @@ onBeforeUnmount(() => {
         <div class="result-group" :class="{ 'with-divider': showResult }">
           <div class="game-area">
             <StatBar v-if="!showResult" :pegs-remaining="game.pegsRemaining" :move-count="game.state.moveCount" :par="game.par" />
+
+            <!-- Opt-in "Genius still reachable" indicator -- see
+                 composables/useReachabilityIndicator.js. The toggle always
+                 shows (it's a global preference), the badge only once the
+                 feature is on AND has something to say about this board. -->
+            <div v-if="!showResult" class="reachability-row">
+              <ReachabilityToggle :enabled="reachability.enabled" @update:enabled="reachability.setEnabled" />
+              <ReachabilityBadge v-if="reachability.supported" :status="reachability.status" />
+            </div>
+
             <ResultHeader
               v-else
               :record="displayedTier"
@@ -450,6 +468,14 @@ onBeforeUnmount(() => {
   font-weight: 600;
   font-size: 0.72rem;
   color: var(--color-ink-dim);
+}
+
+.reachability-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 28px;
 }
 
 .game-area {

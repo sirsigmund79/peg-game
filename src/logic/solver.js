@@ -61,7 +61,7 @@ function countColorsAtOne(perColor) {
  * @param {{from:number, over:number, to:number}[]} moveList - every jump
  *   this board shape allows, from geometry.js
  * @param {number} cellCount - how many holes this board has
- * @param {{nodeBudget?: number, onStateExpanded?: (masks: bigint[], legalMoves: object[]) => void}} [options] -
+ * @param {{nodeBudget?: number, onStateExpanded?: (masks: bigint[], legalMoves: object[]) => void, targetFloor?: number}} [options] -
  *   `nodeBudget` is an optional safety valve, used only by the offline
  *   pool-generator script (scripts/generate-puzzle-pool.js) to skip a
  *   handful of pathologically slow candidates on big, densely connected
@@ -70,13 +70,21 @@ function countColorsAtOne(perColor) {
  *   analysis (scripts/analyze-puzzle-difficulty.js via puzzleDag.js) to
  *   observe every distinct position this solve visits without paying for a
  *   second traversal -- it fires once per distinct state, the first time
- *   `findBest` expands it (never on a cache hit). Leave both unset for
- *   normal gameplay -- there is no limit and no instrumentation by default.
+ *   `findBest` expands it (never on a cache hit). `targetFloor` raises the
+ *   per-node early-exit above its default of `colorCount` (the absolute
+ *   theoretical floor) -- used only by the live Genius-reachability worker
+ *   (workers/reachabilityWorker.js), which only needs to prove "par or
+ *   better is still reachable", not find the true global optimum, so it can
+ *   stop searching a branch the instant it finds ANY line that reaches its
+ *   caller-supplied target instead of continuing to look for something
+ *   better. Leave all three unset for normal gameplay -- there is no limit,
+ *   no instrumentation, and the true optimum is found, by default.
  * @returns {{ findBest: (masks: bigint[]) => {minPegs: number, perColor: number[], move: object|null}, getNodesVisited: () => number }}
  */
 export function createSolver(moveList, cellCount, options = {}) {
   const nodeBudget = options.nodeBudget ?? Infinity;
   const onStateExpanded = options.onStateExpanded;
+  const earlyExitFloor = options.targetFloor ?? null;
   let nodesVisited = 0;
   const cellCountBig = BigInt(cellCount);
 
@@ -176,10 +184,17 @@ export function createSolver(moveList, cellCount, options = {}) {
       // last peg of a color can never be jumped away (there's nothing left
       // to jump it over) -- so no color can ever be reduced below 1 once
       // it starts with at least 1 peg. That makes `colorCount` the true
-      // floor for the total across every color that started non-empty.
-      // Once we find a path that reaches it, there's no point checking the
-      // rest of the moves -- stop early to keep this fast.
-      if (bestPegs === colorCount) {
+      // floor for the total across every color that started non-empty, and
+      // `bestPegs` can never fall below it -- so `bestPegs <= floor` and
+      // `bestPegs === floor` are equivalent whenever `floor` is exactly
+      // `colorCount` (the default below). Once we find a path that reaches
+      // the floor, there's no point checking the rest of the moves -- stop
+      // early to keep this fast. A caller-supplied `targetFloor` (see
+      // createSolver's options) raises this above `colorCount`, trading the
+      // guarantee of finding the true optimum for stopping as soon as ANY
+      // line proves that specific target is reachable.
+      const floor = earlyExitFloor ?? colorCount;
+      if (bestPegs <= floor) {
         break;
       }
     }

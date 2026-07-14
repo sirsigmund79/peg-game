@@ -105,6 +105,13 @@ export function buildPlayablePuzzleFromDesign(savedPuzzle) {
     label: 'Your design',
     par: savedPuzzle.par,
     cellCount: geometry.cellCount,
+    // Hand-drawn designs have no BOARD_CATALOG entry to read a `liveSolve`
+    // flag from, and are typically editor-sized (not the big built-in
+    // shapes englishCross's `liveSolve: false` exists for) -- default to
+    // true. The live Genius-reachability worker's own node budget (see
+    // workers/reachabilityWorker.js) is the real safety net if a design
+    // turns out to be unexpectedly large, not this flag.
+    liveSolve: true,
   };
 }
 
@@ -135,5 +142,8 @@ export function buildDailyPuzzleFromDesign(scheduledDesign, puzzleNumber, date) 
     label: `${emptyHoles.length} empty ${holeWord}`,
     par: scheduledDesign.par,
     cellCount: geometry.cellCount,
+    // See the matching note in buildPlayablePuzzleFromDesign above -- no
+    // BOARD_CATALOG entry to read `liveSolve` from for a hand-drawn design.
+    liveSolve: true,
   };
 }

@@ -154,7 +154,7 @@ const puzzleCache = new Map();
  * @param {number} puzzleNumber
  * @returns {{puzzleNumber:number, date:string, boardId:string, boardName:string,
  *   geometry:object, holeColors:number[], colorCount:number, emptyHoles:number[],
- *   label:string, par:number[], cellCount:number}}
+ *   label:string, par:number[], cellCount:number, liveSolve:boolean}}
  */
 export function getPuzzleForNumber(puzzleNumber) {
   const cached = puzzleCache.get(puzzleNumber);
@@ -190,6 +190,7 @@ export function getPuzzleForNumber(puzzleNumber) {
     label: `${emptyHoles.length} empty ${holeWord}`,
     par: entry.par,
     cellCount: board.geometry.cellCount,
+    liveSolve: board.liveSolve,
   };
 
   puzzleCache.set(puzzleNumber, puzzle);
