@@ -4,8 +4,9 @@
   ----------------------------------------------------------------------------
   Everything a developer needs while working on the game, kept off the
   actual player-facing pages entirely: the puzzle-archive jumper
-  (DevPanel.vue), the synthesized-sound tuner (SoundDevPanel.vue), and the
-  level editor (EditorView.vue).
+  (DevPanel.vue), the month-paginated puzzle admin grid (AdminPuzzlesView.vue,
+  which opens AdminPuzzleEditPanel.vue for full layout/metadata editing and
+  re-solving), and the level editor (EditorView.vue).
 
   This page has no "current puzzle" of its own -- it's not playing
   anything -- so it tracks a small local `devPuzzleNumber` purely so
@@ -27,7 +28,7 @@ import { getPuzzleForNumber, getTodayPuzzleNumber } from '../logic/daily.js';
 import { useRouter } from '../composables/useRouter.js';
 import { pendingCustomPuzzle } from '../composables/usePendingPuzzle.js';
 import DevPanel from './DevPanel.vue';
-import SoundDevPanel from './SoundDevPanel.vue';
+import AdminPuzzlesView from './AdminPuzzlesView.vue';
 import BadgeStatsDevPanel from './BadgeStatsDevPanel.vue';
 import EditorView from './EditorView.vue';
 
@@ -50,7 +51,7 @@ function handlePlayCustomPuzzle(customPuzzle) {
 <template>
   <div class="dev-tools-view">
     <DevPanel :current-puzzle="devPuzzle" @load-puzzle-number="handleLoadPuzzleNumber" />
-    <SoundDevPanel />
+    <AdminPuzzlesView />
     <BadgeStatsDevPanel />
     <EditorView @play-puzzle="handlePlayCustomPuzzle" />
   </div>
@@ -60,7 +61,11 @@ function handlePlayCustomPuzzle(customPuzzle) {
 .dev-tools-view {
   flex: 1;
   width: 100%;
-  max-width: 460px;
+  /* Wider than the other dev panels' own natural width (they cap themselves
+     internally around 440px, matching the real board) -- AdminPuzzlesView's
+     month grid needs real room to be "big and scannable" rather than a
+     single cramped column. */
+  max-width: 1100px;
   margin: 0 auto;
   padding: 12px 16px 32px;
   display: flex;

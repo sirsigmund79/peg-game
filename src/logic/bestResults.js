@@ -41,6 +41,21 @@ export function getBestForPuzzle(puzzleNumber) {
 }
 
 /**
+ * @returns {Object<number, {overPar: number, pegsRemaining: number[], won: boolean}>}
+ *   every puzzle's best-ever recorded result, keyed by puzzle number -- masks
+ *   omitted (unlike getBestForPuzzle()) since the only known caller
+ *   (components/StatsView.vue's rank breakdown) just needs overPar.
+ */
+export function getAllBestResults() {
+  const store = getBestStore();
+  const results = {};
+  for (const [puzzleNumber, entry] of Object.entries(store)) {
+    results[puzzleNumber] = { overPar: entry.overPar, pegsRemaining: entry.pegsRemaining, won: entry.won };
+  }
+  return results;
+}
+
+/**
  * Records a finished round's result as the new best for that puzzle, if it's
  * the first attempt recorded or strictly better (lower overPar) than what's
  * already stored.

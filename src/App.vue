@@ -16,12 +16,12 @@
 import { computed, watch } from 'vue';
 import { useTheme } from './composables/useTheme.js';
 import { useRouter } from './composables/useRouter.js';
-import { trackPageview } from './services/analytics.js';
+import { EVENTS, track, trackPageview } from './services/analytics.js';
 import PlayView from './components/PlayView.vue';
 import ArchiveView from './components/ArchiveView.vue';
+import StatsView from './components/StatsView.vue';
 import DevToolsView from './components/DevToolsView.vue';
 import StoryView from './components/StoryView.vue';
-import SoundToggleButton from './components/SoundToggleButton.vue';
 
 useTheme(); // applies the Moose theme's CSS variables to the page -- see composables/useTheme.js
 
@@ -40,6 +40,7 @@ const isKnownRoute = computed(() => {
   const [first, second] = route.segments;
   if (first === undefined) return true; // "#/" -- home
   if (first === 'archive') return true;
+  if (first === 'stats') return true;
   if (first === 'dev') return isDevBuild;
   if (first === 'story') return true; // hidden prototype -- no nav link, see components/StoryView.vue
   if (first === 'play') return second === undefined || /^-?\d+$/.test(second);
@@ -64,6 +65,7 @@ watch(
 // as any other unrecognized path).
 const page = computed(() => {
   if (route.segments[0] === 'archive') return 'archive';
+  if (route.segments[0] === 'stats') return 'stats';
   if (route.segments[0] === 'dev' && isDevBuild) return 'dev';
   if (route.segments[0] === 'story') return 'story';
   return 'play';
@@ -79,27 +81,44 @@ watch(
   },
   { immediate: true }
 );
+
+function handleStatsNavClick() {
+  track(EVENTS.STATS_NAV_CLICKED, {});
+}
 </script>
 
 <template>
   <div class="page">
     <header class="header">
-      <div class="header-top">
-        <a href="#/" class="wordmark">
-          Dot Hop
-          <span class="beta-pill">Beta</span>
-        </a>
+      <div class="header-inner">
+        <div class="header-text">
+          <a href="#/" class="wordmark">
+            Dot Hop
+            <span class="beta-pill">Beta</span>
+          </a>
+        </div>
         <nav class="nav-links">
-          <SoundToggleButton />
+          
+          <a href="#/stats" class="icon-link" :class="{ active: page === 'stats' }" aria-label="Stats" title="Stats" @click="handleStatsNavClick">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" />
+              <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
+              <path d="M4 22h16" />
+              <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" />
+              <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" />
+              <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" />
+            </svg>
+            <span class="icon-link-label">Stats</span>
+          </a>
           <a href="#/archive" class="nav-link" :class="{ active: page === 'archive' }">Archive</a>
         </nav>
       </div>
-      <p class="tagline">Hop same-color dots over each other to clear them from the board.</p>
     </header>
 
     <main class="app">
       <PlayView v-if="page === 'play'" />
       <ArchiveView v-else-if="page === 'archive'" />
+      <StatsView v-else-if="page === 'stats'" />
       <DevToolsView v-else-if="page === 'dev'" />
       <StoryView v-else-if="page === 'story'" />
     </main>
@@ -116,16 +135,23 @@ watch(
 
 .header {
   padding: max(14px, env(safe-area-inset-top, 0px)) 16px 10px;
-  text-align: center;
   background: var(--color-header-bg);
   border-bottom: var(--frame-border);
 }
 
-.header-top {
-  position: relative;
+.header-inner {
+  width: 100%;
+  max-width: 460px;
+  margin: 0 auto;
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.header-text {
+  text-align: left;
+  min-width: 0;
 }
 
 .wordmark {
@@ -153,24 +179,15 @@ watch(
   border-radius: 999px;
 }
 
-.tagline {
-  margin: 4px 0 0;
-  font-family: var(--font-ui);
-  font-weight: 600;
-  font-size: 0.72rem;
-  color: var(--color-header-text-dim);
-}
-
 .nav-links {
-  position: absolute;
-  right: 0;
-  top: 50%;
-  transform: translateY(-50%);
   display: flex;
+  flex-shrink: 0;
   gap: 4px;
 }
 
 .nav-link {
+  display: inline-flex;
+  align-items: center;
   padding: 3px 10px;
   font-family: var(--font-ui);
   font-weight: 700;
@@ -184,6 +201,44 @@ watch(
 }
 
 .nav-link.active {
+  background: var(--color-header-text);
+  border-color: var(--color-header-text);
+  color: var(--color-header-bg);
+}
+
+.icon-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--color-header-text-dim);
+  background: transparent;
+  color: var(--color-header-text-dim);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.icon-link-label {
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: 0.7rem;
+}
+
+@media (hover: hover) {
+  .icon-link:not(.active):hover {
+    color: var(--color-header-text);
+    border-color: var(--color-header-text);
+  }
+}
+
+.icon-link:focus-visible {
+  outline: 2px solid var(--color-header-text);
+  outline-offset: 2px;
+}
+
+.icon-link.active {
   background: var(--color-header-text);
   border-color: var(--color-header-text);
   color: var(--color-header-bg);

@@ -16,6 +16,8 @@
 
 import posthog from 'posthog-js';
 import { getHistory } from '../logic/history.js';
+import { getTodayPuzzleNumber } from '../logic/daily.js';
+import { computeStreaks } from '../logic/streaks.js';
 
 /** Every custom event name this app fires, in one place so call sites never hand-type a string. */
 export const EVENTS = {
@@ -30,7 +32,8 @@ export const EVENTS = {
   ARCHIVE_PUZZLE_SELECTED: 'archive_puzzle_selected',
   ARCHIVE_TEASER_DAY_SELECTED: 'archive_teaser_day_selected',
   ARCHIVE_TEASER_EXPLORE_CLICKED: 'archive_teaser_explore_clicked',
-  SOUND_TOGGLED: 'sound_toggled',
+  STATS_NAV_CLICKED: 'stats_nav_clicked',
+  STATS_ARCHIVE_CTA_CLICKED: 'stats_archive_cta_clicked',
   BADGE_UNLOCKED: 'badge_unlocked',
 };
 
@@ -123,7 +126,7 @@ export function syncPlayerStatsToPostHog() {
 
   const lifetimePuzzlesCompleted = results.length;
   const lifetimeWins = results.filter((result) => result.won).length;
-  const { current, longest } = computeStreaks(Object.keys(history).map(Number));
+  const { current, longest } = computeStreaks(Object.keys(history).map(Number), getTodayPuzzleNumber());
 
   posthog.setPersonProperties({
     lifetime_puzzles_completed: lifetimePuzzlesCompleted,
@@ -132,36 +135,4 @@ export function syncPlayerStatsToPostHog() {
     current_streak_days: current,
     longest_streak_days: longest,
   });
-}
-
-/**
- * Given every puzzle NUMBER this device has completed (puzzle numbers are
- * consecutive calendar days -- see logic/daily.js), finds the current
- * consecutive-day streak (must include the most recent puzzle number played)
- * and the longest streak ever seen in this device's history.
- *
- * @param {number[]} puzzleNumbers
- * @returns {{current: number, longest: number}}
- */
-function computeStreaks(puzzleNumbers) {
-  const sorted = [...new Set(puzzleNumbers)].sort((a, b) => a - b);
-  if (sorted.length === 0) return { current: 0, longest: 0 };
-
-  let longest = 1;
-  let run = 1;
-  for (let i = 1; i < sorted.length; i++) {
-    run = sorted[i] === sorted[i - 1] + 1 ? run + 1 : 1;
-    longest = Math.max(longest, run);
-  }
-
-  // The "current" streak only counts if it runs right up to the most
-  // recently completed puzzle -- a streak that ended a week ago isn't
-  // current anymore.
-  let current = 1;
-  for (let i = sorted.length - 1; i > 0; i--) {
-    if (sorted[i] === sorted[i - 1] + 1) current += 1;
-    else break;
-  }
-
-  return { current, longest };
 }

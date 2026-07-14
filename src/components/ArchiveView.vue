@@ -14,7 +14,7 @@
   ============================================================================
 -->
 <script setup>
-import { computed } from 'vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { getTodayPuzzleNumber, getPuzzleForNumber } from '../logic/daily.js';
 import { getHistory } from '../logic/history.js';
 import { getRankForOverPar } from '../logic/rules.js';
@@ -72,6 +72,38 @@ const monthGroups = computed(() => {
   return [...byMonth.values()];
 });
 
+// Anyone browsing the archive is playing catch-up, not looking forward --
+// this is a quiet nudge that a brand new puzzle is coming too, so it's worth
+// coming back tomorrow instead of only ever replaying old days. Local
+// midnight, same cutover logic/daily.js's getTodayPuzzleNumber() uses, so
+// the countdown hits zero at exactly the moment "today" flips over.
+const nextPuzzleAt = (() => {
+  const today = new Date();
+  return new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1).getTime();
+})();
+
+const now = ref(Date.now());
+let tickIntervalId = null;
+
+onMounted(() => {
+  tickIntervalId = setInterval(() => {
+    now.value = Date.now();
+  }, 1000);
+});
+
+onUnmounted(() => {
+  clearInterval(tickIntervalId);
+});
+
+/** "HH:MM:SS" remaining until tomorrow's puzzle unlocks, floored at zero. */
+const countdownToNextPuzzle = computed(() => {
+  const remainingSeconds = Math.max(0, Math.floor((nextPuzzleAt - now.value) / 1000));
+  const hours = Math.floor(remainingSeconds / 3600);
+  const minutes = Math.floor((remainingSeconds % 3600) / 60);
+  const seconds = remainingSeconds % 60;
+  return [hours, minutes, seconds].map((unit) => String(unit).padStart(2, '0')).join(':');
+});
+
 function playPuzzle(puzzleNumber) {
   track(EVENTS.ARCHIVE_PUZZLE_SELECTED, {
     puzzle_number: puzzleNumber,
@@ -86,6 +118,7 @@ function playPuzzle(puzzleNumber) {
 <template>
   <div class="archive-view">
     <p class="archive-intro">The last {{ ARCHIVE_WINDOW_DAYS }} days of puzzles. Pick a day to play or replay it.</p>
+    <p class="countdown-note">Next puzzle in {{ countdownToNextPuzzle }}</p>
 
     <section v-for="group in monthGroups" :key="group.label" class="month-group">
       <h2 class="month-label">{{ group.label }}</h2>
@@ -127,6 +160,16 @@ function playPuzzle(puzzleNumber) {
   font-family: var(--font-ui);
   font-size: 0.85rem;
   color: var(--color-ink-secondary);
+  text-align: center;
+}
+
+.countdown-note {
+  margin: -10px 0 18px;
+  font-family: var(--font-ui);
+  font-size: 0.75rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-ink-dim);
   text-align: center;
 }
 

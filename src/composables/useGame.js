@@ -24,7 +24,7 @@ import {
   getRankForOverPar,
 } from '../logic/rules.js';
 import { vibrateJump, vibrateRoundOver } from '../fx/haptics.js';
-import { playSound, playRoundOverChime, soundState } from '../fx/sound.js';
+import { playRoundOverChime } from '../fx/sound.js';
 import { recordResult, getResultForPuzzle } from '../logic/history.js';
 import { recordBestIfBetter } from '../logic/bestResults.js';
 import { getFinishedMasks, recordRoundFinished, clearRoundFinished } from '../logic/roundState.js';
@@ -176,9 +176,7 @@ export function useGame(puzzle, options = {}) {
     // worth a distinct "nope" sound.
     if (holeHasPeg(index)) {
       state.selectedHole = index;
-      playSound('select');
     } else {
-      if (state.selectedHole !== null) playSound('invalid');
       state.selectedHole = null;
     }
   }
@@ -211,20 +209,17 @@ export function useGame(puzzle, options = {}) {
       track(EVENTS.PUZZLE_FIRST_MOVE, { puzzle_number: puzzle.puzzleNumber ?? null });
     }
 
-    // Buzz and "landing" sound for the jump itself, plus an extra buzz and
-    // chime once the round ends -- ANY ending, not just reaching the
-    // puzzle's par, so getting stuck early still feels like a clear,
-    // deliberate stop rather than the game just going quiet on you.
+    // Buzz for the jump itself, plus an extra buzz and chime once the round
+    // ends -- ANY ending, not just reaching the puzzle's par, so getting
+    // stuck early still feels like a clear, deliberate stop rather than the
+    // game just going quiet on you.
     vibrateJump();
-    playSound('move');
     const roundJustEnded = isRoundOver(state.masks, geometry.moves);
     if (roundJustEnded) {
       vibrateRoundOver();
       const finalPegsRemaining = countPegsRemaining(state.masks);
       const won = finalPegsRemaining.every((count, colorIndex) => count === puzzle.par[colorIndex]);
-      // Scheduled to start once the move sound's tone has finished, rather
-      // than stacking both sounds on top of each other.
-      playRoundOverChime(soundState.move.duration);
+      playRoundOverChime();
       const overParAtEnd = sum(finalPegsRemaining) - sum(puzzle.par);
       // Custom editor designs (puzzleNumber === null) aren't real daily
       // puzzles, so components/ArchiveView.vue has nothing to show for
@@ -270,7 +265,6 @@ export function useGame(puzzle, options = {}) {
     state.moveCount = Math.max(0, state.moveCount - 1);
     state.selectedHole = null;
     state.lastMove = null;
-    playSound('undo');
   }
 
   /** Resets the board back to the puzzle's starting position. */

@@ -9,8 +9,8 @@
   which badge ids have unlocked, with a Refresh button since neither store
   is reactive on its own (both live in localStorage).
 
-  IMPORTANT: dev-only, same as DevPanel.vue/SoundDevPanel.vue -- only ever
-  rendered when `import.meta.env.DEV` is true, never in a production build.
+  IMPORTANT: dev-only, same as DevPanel.vue -- only ever rendered when
+  `import.meta.env.DEV` is true, never in a production build.
   ============================================================================
 -->
 <script setup>

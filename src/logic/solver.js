@@ -61,15 +61,22 @@ function countColorsAtOne(perColor) {
  * @param {{from:number, over:number, to:number}[]} moveList - every jump
  *   this board shape allows, from geometry.js
  * @param {number} cellCount - how many holes this board has
- * @param {{nodeBudget?: number}} [options] - optional safety valve, used
- *   only by the offline pool-generator script (scripts/generate-puzzle-pool.js)
- *   to skip a handful of pathologically slow candidates on big, densely
- *   connected boards instead of running (near) forever. Leave unset for
- *   normal gameplay -- there is no limit by default.
- * @returns {{ findBest: (masks: bigint[]) => {minPegs: number, perColor: number[], move: object|null} }}
+ * @param {{nodeBudget?: number, onStateExpanded?: (masks: bigint[], legalMoves: object[]) => void}} [options] -
+ *   `nodeBudget` is an optional safety valve, used only by the offline
+ *   pool-generator script (scripts/generate-puzzle-pool.js) to skip a
+ *   handful of pathologically slow candidates on big, densely connected
+ *   boards instead of running (near) forever. `onStateExpanded` is an
+ *   optional instrumentation hook, used only by the offline difficulty
+ *   analysis (scripts/analyze-puzzle-difficulty.js via puzzleDag.js) to
+ *   observe every distinct position this solve visits without paying for a
+ *   second traversal -- it fires once per distinct state, the first time
+ *   `findBest` expands it (never on a cache hit). Leave both unset for
+ *   normal gameplay -- there is no limit and no instrumentation by default.
+ * @returns {{ findBest: (masks: bigint[]) => {minPegs: number, perColor: number[], move: object|null}, getNodesVisited: () => number }}
  */
 export function createSolver(moveList, cellCount, options = {}) {
   const nodeBudget = options.nodeBudget ?? Infinity;
+  const onStateExpanded = options.onStateExpanded;
   let nodesVisited = 0;
   const cellCountBig = BigInt(cellCount);
 
@@ -106,6 +113,21 @@ export function createSolver(moveList, cellCount, options = {}) {
     nodesVisited += 1;
     if (nodesVisited > nodeBudget) {
       throw new SolverBudgetExceededError(`Exceeded node budget of ${nodeBudget}`);
+    }
+
+    // Instrumentation only -- computed fresh (not from the scoring loop
+    // below, which may stop early once it proves the theoretical floor) so
+    // callers always see the COMPLETE legal-move list for this state, not
+    // just whatever the early-exit scoring loop happened to look at.
+    if (onStateExpanded) {
+      const occupiedForCheck = masks.reduce((acc, mask) => acc | mask, 0n);
+      const legalMoves = moveList.filter((move) => {
+        const fromColor = colorAt(masks, move.from);
+        if (fromColor === -1) return false;
+        if (colorAt(masks, move.over) !== fromColor) return false;
+        return !(occupiedForCheck & (1n << BigInt(move.to)));
+      });
+      onStateExpanded(masks, legalMoves);
     }
 
     const colorCount = masks.length;
@@ -167,5 +189,13 @@ export function createSolver(moveList, cellCount, options = {}) {
     return answer;
   }
 
-  return { findBest };
+  // Exposes the DFS's cache-miss count -- i.e. how many distinct board
+  // positions this solver actually had to expand to reach its answer(s) so
+  // far. Used offline by scripts/analyze-puzzle-difficulty.js as a "search
+  // effort" difficulty signal; normal gameplay callers just ignore it.
+  function getNodesVisited() {
+    return nodesVisited;
+  }
+
+  return { findBest, getNodesVisited };
 }

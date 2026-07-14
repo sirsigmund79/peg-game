@@ -59,7 +59,8 @@ centralizes sharing. Two ground rules shaped what's here:
 | `share_clicked` | "Challenge A Friend" tapped | `puzzle_number`, `rank`, `won`, `over_par` |
 | `share_copy_result` | Clipboard copy resolves | `puzzle_number`, `success` |
 | `archive_puzzle_selected` | A day picked from the archive | `puzzle_number`, `days_ago`, `already_played`, `is_today` |
-| `sound_toggled` | Mute/unmute pressed | `muted` |
+| `stats_nav_clicked` | Header's Stats icon tapped (`App.vue`) | — |
+| `stats_archive_cta_clicked` | "Check out the Archive" tapped on the stats page (`StatsView.vue`) | — |
 | `badge_unlocked` | A badge's unlock condition (see `logic/badges.js`) is newly satisfied | `badge_id`, `puzzle_number` |
 | `$exception` | Any uncaught error/rejection | message, stack, `app_env` |
 

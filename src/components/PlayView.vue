@@ -354,6 +354,11 @@ onBeforeUnmount(() => {
               :masks-override="showResult && viewMode === 'best' ? displayedRecord.masks : null"
               :pulsing-index="viewMode === 'this' ? reveal.pulsingHoleIndex : -1"
             />
+
+            <!-- Only shown while a round is actually being played -- once the
+                 result screen takes over (see `showResult` above) this copy
+                 has nothing left to explain. -->
+            <p v-if="!showResult" class="tagline">Hop same-color dots to clear the board</p>
           </div>
 
           <!-- A single fade+scale entrance for the toggle/footer row that
@@ -436,6 +441,14 @@ onBeforeUnmount(() => {
   font-weight: 600;
   font-size: 0.72rem;
   letter-spacing: 0.03em;
+  color: var(--color-ink-dim);
+}
+
+.tagline {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-weight: 600;
+  font-size: 0.72rem;
   color: var(--color-ink-dim);
 }
 
