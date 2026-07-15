@@ -2,9 +2,9 @@
 // logic/boardLayout.js
 // ----------------------------------------------------------------------------
 // Shared "how do we draw this board shape on screen" math, used by both
-// Board.vue (the real, playable board) and MiniBoard.vue (the small
-// read-only snapshot shown in the result modal) -- so hole positioning and
-// sizing rules can never quietly drift apart between the two.
+// Board.vue (the real, playable board) and PuzzleGlyph.vue (the small
+// pointillist puzzle preview in the archive) -- so hole positioning and
+// sizing rules can never quietly drift apart between them.
 //
 // No Vue code lives here -- these are plain functions over a
 // logic/geometry.js geometry object.

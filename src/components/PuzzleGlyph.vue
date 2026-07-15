@@ -12,11 +12,11 @@
   ArchiveDayStrip.vue instead passes real per-hole colors via `holeColors`,
   which switches this into a completely different, bolder rendering: every
   dot the SAME radius (sized off the board's own tightest neighbor gap, via
-  boardLayout.js's computeHoleDiameterPercent -- the exact math Board.vue/
-  MiniBoard.vue use so a packed board's dots shrink just enough to avoid
-  merging into a blob) at full opacity, with a thin dark outline -- legible
-  at a glance rather than sketchy, since it's meant to look enticing, not
-  just recognizable.
+  boardLayout.js's computeHoleDiameterPercent -- the exact math Board.vue
+  uses so a packed board's dots shrink just enough to avoid merging into a
+  blob) at full opacity, with a thin dark outline -- legible at a glance
+  rather than sketchy, since it's meant to look enticing, not just
+  recognizable.
   ============================================================================
 -->
 <script setup>
@@ -51,7 +51,7 @@ const dots = computed(() => {
   const emptySet = new Set(props.emptyHoles);
   const bold = isBold.value;
   const positions = computeDisplayPositions(geometry);
-  // Half of Board.vue/MiniBoard.vue's own hole diameter -- already sized off
+  // Half of Board.vue's own hole diameter -- already sized off
   // this board's tightest neighbor gap and capped for sparse boards, so a
   // packed board (e.g. a 35-peg star) gets smaller dots than a sparse one
   // instead of every board using one fixed radius that overlaps on the

@@ -21,7 +21,6 @@ import PlayView from './components/PlayView.vue';
 import ArchiveView from './components/ArchiveView.vue';
 import StatsView from './components/StatsView.vue';
 import DevToolsView from './components/DevToolsView.vue';
-import StoryView from './components/StoryView.vue';
 
 useTheme(); // applies the Moose theme's CSS variables to the page -- see composables/useTheme.js
 
@@ -42,7 +41,6 @@ const isKnownRoute = computed(() => {
   if (first === 'archive') return true;
   if (first === 'stats') return true;
   if (first === 'dev') return isDevBuild;
-  if (first === 'story') return true; // hidden prototype -- no nav link, see components/StoryView.vue
   if (first === 'play') return second === undefined || /^-?\d+$/.test(second);
   return false;
 });
@@ -67,7 +65,6 @@ const page = computed(() => {
   if (route.segments[0] === 'archive') return 'archive';
   if (route.segments[0] === 'stats') return 'stats';
   if (route.segments[0] === 'dev' && isDevBuild) return 'dev';
-  if (route.segments[0] === 'story') return 'story';
   return 'play';
 });
 
@@ -120,7 +117,6 @@ function handleStatsNavClick() {
       <ArchiveView v-else-if="page === 'archive'" />
       <StatsView v-else-if="page === 'stats'" />
       <DevToolsView v-else-if="page === 'dev'" />
-      <StoryView v-else-if="page === 'story'" />
     </main>
   </div>
 </template>
