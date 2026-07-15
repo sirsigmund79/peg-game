@@ -119,13 +119,19 @@ for (let puzzleNumber = 0; puzzleNumber < PUZZLE_POOL.length; puzzleNumber++) {
   const puzzle = getPuzzleForNumber(puzzleNumber);
   boardMixCounts[puzzle.boardId] = (boardMixCounts[puzzle.boardId] || 0) + 1;
 
-  const expectedColorCount = getColorCountForCellCount(puzzle.cellCount);
   const startingPerColor = countPegsRemaining(createStartingMasks(puzzle.cellCount, puzzle.holeColors, puzzle.colorCount));
   const startingTotal = startingPerColor.reduce((sum, count) => sum + count, 0);
   const parTotal = puzzle.par.reduce((sum, count) => sum + count, 0);
 
   const problems = [];
-  if (puzzle.colorCount !== expectedColorCount) problems.push(`colorCount ${puzzle.colorCount} !== expected ${expectedColorCount}`);
+  // The default color-count-for-cell-count rule only applies to
+  // pool-generated puzzles -- a hand-scheduled design (logic/scheduledPuzzles.js,
+  // boardId 'scheduled') is free to use fewer colors than that rule would
+  // pick, by design.
+  if (puzzle.boardId !== 'scheduled') {
+    const expectedColorCount = getColorCountForCellCount(puzzle.cellCount);
+    if (puzzle.colorCount !== expectedColorCount) problems.push(`colorCount ${puzzle.colorCount} !== expected ${expectedColorCount}`);
+  }
   if (puzzle.par.length !== puzzle.colorCount) problems.push(`par length ${puzzle.par.length} !== colorCount ${puzzle.colorCount}`);
   if (puzzle.par.some((count) => count < 1)) problems.push(`par has a color at 0: [${puzzle.par}]`);
   if (parTotal >= startingTotal) problems.push(`par total ${parTotal} isn't fewer pegs than the starting total ${startingTotal}`);
@@ -195,12 +201,18 @@ console.log(`  -> ${qualityOk ? 'PASSED' : 'FAILED'}: ${qualityFailures} entries
 // the pool's entries should be used EXACTLY once across a full cycle. Keyed
 // on holeColors (not just which holes start empty) since two configs with
 // the same empty holes but a different color split are meaningfully
-// different puzzles.
+// different puzzles. Hand-scheduled puzzles (boardId 'scheduled') are
+// excluded from this -- they're free-form authored content that can
+// legitimately reuse a layout across dates, unlike the pool/shuffle, which
+// this check actually exists to prove correct.
 console.log('Check 6: no puzzle repeats within one full cycle of the pool');
 const seenPuzzleKeys = new Set();
 let duplicateFound = false;
+let nonScheduledDayCount = 0;
 for (let puzzleNumber = 0; puzzleNumber < PUZZLE_POOL.length; puzzleNumber++) {
   const puzzle = getPuzzleForNumber(puzzleNumber);
+  if (puzzle.boardId === 'scheduled') continue;
+  nonScheduledDayCount++;
   const key = `${puzzle.boardId}:${puzzle.holeColors.join(',')}`;
   if (seenPuzzleKeys.has(key)) {
     console.log(`  FAILED: puzzle #${puzzleNumber} repeats an earlier puzzle (${key})`);
@@ -208,7 +220,7 @@ for (let puzzleNumber = 0; puzzleNumber < PUZZLE_POOL.length; puzzleNumber++) {
   }
   seenPuzzleKeys.add(key);
 }
-const noDuplicates = !duplicateFound && seenPuzzleKeys.size === PUZZLE_POOL.length;
+const noDuplicates = !duplicateFound && seenPuzzleKeys.size === nonScheduledDayCount;
 if (!noDuplicates) allPassed = false;
 const coverage = describePoolCoverage();
 console.log(`  -> ${noDuplicates ? 'PASSED' : 'FAILED'}: ${seenPuzzleKeys.size} unique puzzles across ${coverage.days} days (~${coverage.years} years) before any repeat\n`);
