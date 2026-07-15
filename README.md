@@ -1,4 +1,4 @@
-# Dot Hop
+# Dot Hopper
 
 A daily peg-solitaire puzzle (like the wooden triangle game on every Cracker
 Barrel table), Wordle-style: everyone gets the same puzzle each day, worked

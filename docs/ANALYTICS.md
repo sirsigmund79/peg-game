@@ -1,6 +1,6 @@
 # Analytics: dashboards, experiments, and how this is instrumented
 
-Dot Hop had zero analytics before this. This doc covers what's now tracked,
+Dot Hopper had zero analytics before this. This doc covers what's now tracked,
 the dashboards worth building from it, and a slate of future experiments —
 sized for a solo indie dev running one PostHog project, not a studio
 analytics team. If you haven't set up PostHog yet, start at "Setup" below.
@@ -9,17 +9,17 @@ analytics team. If you haven't set up PostHog yet, start at "Setup" below.
 
 1. Create a PostHog Cloud account (free tier is plenty for this game's
    volume) at posthog.com.
-2. Create **two projects**: `Dot Hop` (production) and `Dot Hop Dev` (local
+2. Create **two projects**: `Dot Hopper` (production) and `Dot Hopper Dev` (local
    testing). This is the cleanest way to keep your own testing out of real
    player dashboards — no filters to remember everywhere.
    - If you'd rather run one project, every event carries an `app_env`
      property (`"production"` / `"development"`) — add `app_env =
      production` as a base filter on each insight instead.
-3. Copy `.env.example` to `.env.local` and paste the **Dot Hop Dev**
+3. Copy `.env.example` to `.env.local` and paste the **Dot Hopper Dev**
    project's API key into `VITE_POSTHOG_KEY`. `npm run dev` now sends events
    there.
 4. In your Cloudflare Pages project settings, add `VITE_POSTHOG_KEY` (the
-   **Dot Hop** production key) and `VITE_POSTHOG_HOST` as build environment
+   **Dot Hopper** production key) and `VITE_POSTHOG_HOST` as build environment
    variables. These are read at build time (`import.meta.env`, via Vite), so
    a Pages rebuild is required after setting them.
 5. **Known limitation, not a bug**: ad blockers and privacy-focused browsers

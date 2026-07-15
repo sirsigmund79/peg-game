@@ -17,7 +17,7 @@
 import { getPegColor } from '../logic/pegColors.js';
 
 /** The game's fixed public URL, used in every share. */
-export const SITE_URL = 'https://dot-hop.pages.dev/';
+export const SITE_URL = 'https://dothopper.com/';
 
 /**
  * Builds the short, spoiler-safe text people post when they share a result
@@ -42,7 +42,7 @@ export function buildShareText({ pegsRemaining, puzzleNumber = null, formattedDa
   // challenge reads differently than every other rank (see logic/rules.js's
   // RANK_TIERS).
   const challengeLine = rank ? (rank === 'Genius' ? 'I got Genius. Can you?\n' : `I got ${rank}. Can you beat it?\n`) : '';
-  const dateLine = formattedDate ? `Dot Hop — ${formattedDate}\n` : '';
+  const dateLine = formattedDate ? `Dot Hopper — ${formattedDate}\n` : '';
   // The `?ref=share` marker doesn't reveal anything spoiler-y -- it's the
   // only way to tell a session arriving from a shared result apart from any
   // other visit, since PostHog auto-captures $current_url/$referrer but has

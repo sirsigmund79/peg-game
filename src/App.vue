@@ -90,7 +90,7 @@ function handleStatsNavClick() {
       <div class="header-inner">
         <div class="header-text">
           <a href="#/" class="wordmark">
-            Dot Hop
+            Dot Hopper
             <span class="beta-pill">Beta</span>
           </a>
         </div>

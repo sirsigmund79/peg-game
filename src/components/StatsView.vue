@@ -2,7 +2,7 @@
   ============================================================================
   components/StatsView.vue
   ----------------------------------------------------------------------------
-  A read-only summary of this device's lifetime Dot Hop stats -- reachable
+  A read-only summary of this device's lifetime Dot Hopper stats -- reachable
   from the header's trophy icon (see App.vue). Everything shown here is
   already being tracked for other reasons (the badge system, PostHog) and is
   just being surfaced to the player directly:
@@ -91,7 +91,7 @@ const maxRankCount = Math.max(1, ...rankBars.map((bar) => bar.count));
 
 <template>
   <div class="stats-view">
-    <p class="stats-intro">Revel in the glory of your Dot Hop stats.</p>
+    <p class="stats-intro">Revel in the glory of your Dot Hopper stats.</p>
 
     <div class="headline-row">
       <div v-for="stat in headlineStats" :key="stat.label" class="headline-tile">
