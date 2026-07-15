@@ -9,7 +9,7 @@
 // midnight, not at a single fixed moment worldwide.
 //
 // HOW "NEVER REPEATS" WORKS
-// logic/puzzlePool.js contains a big, fixed list of solver-verified starting
+// logic/puzzlePool.js contains a fixed list of solver-verified starting
 // positions (every shape in boards.js, combined) -- see
 // scripts/generate-puzzle-pool.js for how that list was built. This file
 // assigns each day a DIFFERENT entry from that pool using a shuffled-but-
@@ -19,12 +19,23 @@
 // POOL_SIZE / describePoolCoverage() below for exactly how many days that
 // buys us.
 //
+// The pool is intentionally kept small and refreshed periodically (see
+// scripts/freeze-and-shrink-pool.js) rather than front-loaded with years of
+// content up front. Because the shuffle's output depends on the pool's
+// exact SIZE, shrinking it would silently change what puzzle an
+// already-shown day "was" -- so every day up through some point in the past
+// is instead served from logic/frozenDailyPuzzles.js, a permanent record
+// captured before each shrink, checked below BEFORE the pool lookup (but
+// after hand-scheduled puzzles, which stay dynamic since they're keyed by
+// date, not pool size).
+//
 // No Vue code lives here -- useDaily.js (a composable) wraps this in
 // reactive state for the screen.
 // ============================================================================
 
 import { BOARD_CATALOG } from './boards.js';
 import { PUZZLE_POOL } from './puzzlePool.js';
+import { FROZEN_DAILY_PUZZLES } from './frozenDailyPuzzles.js';
 import { SCHEDULED_PUZZLES } from './scheduledPuzzles.js';
 import { buildDailyPuzzleFromDesign } from './customBoard.js';
 import { getEmptyHolesFromColors } from './rules.js';
@@ -147,6 +158,40 @@ export function describePoolCoverage() {
 const puzzleCache = new Map();
 
 /**
+ * Builds the full puzzle-definition shape from just a board id, hole
+ * colors, and par -- shared by the frozen-day path and the normal
+ * pool-lookup path below so the two can never drift apart on how the rest
+ * of the fields (geometry, label, etc.) get derived.
+ *
+ * @param {number} puzzleNumber
+ * @param {string} date
+ * @param {string} boardId
+ * @param {number[]} holeColors
+ * @param {number[]} par
+ * @returns {{puzzleNumber:number, date:string, boardId:string, boardName:string,
+ *   geometry:object, holeColors:number[], colorCount:number, emptyHoles:number[],
+ *   label:string, par:number[], cellCount:number}}
+ */
+function buildPuzzleFromEntry(puzzleNumber, date, boardId, holeColors, par) {
+  const board = BOARD_CATALOG[boardId];
+  const emptyHoles = getEmptyHolesFromColors(holeColors);
+  const holeWord = emptyHoles.length === 1 ? 'hole' : 'holes';
+  return {
+    puzzleNumber,
+    date,
+    boardId: board.id,
+    boardName: board.name,
+    geometry: board.geometry,
+    holeColors,
+    colorCount: par.length,
+    emptyHoles,
+    label: `${emptyHoles.length} empty ${holeWord}`,
+    par,
+    cellCount: board.geometry.cellCount,
+  };
+}
+
+/**
  * Works out the full puzzle definition for a given puzzle number: which
  * board shape, which holes start empty (and what color each starting peg
  * is), and the solver-confirmed par (one target count per color).
@@ -163,8 +208,9 @@ export function getPuzzleForNumber(puzzleNumber) {
   const date = getDateForPuzzleNumber(puzzleNumber);
 
   // A hand-designed puzzle scheduled for this exact date (see
-  // logic/scheduledPuzzles.js) always wins over the normal pool pick --
-  // this is also how a past archive day can be swapped for a custom design.
+  // logic/scheduledPuzzles.js) always wins over everything else -- this is
+  // also how a past archive day can be swapped for a custom design, even
+  // one already covered by the frozen record below.
   const scheduledDesign = SCHEDULED_PUZZLES[date];
   if (scheduledDesign) {
     const scheduledPuzzle = buildDailyPuzzleFromDesign(scheduledDesign, puzzleNumber, date);
@@ -172,25 +218,21 @@ export function getPuzzleForNumber(puzzleNumber) {
     return scheduledPuzzle;
   }
 
+  // A day already covered by logic/frozenDailyPuzzles.js -- see this file's
+  // header and scripts/freeze-and-shrink-pool.js. Must be checked before the
+  // pool lookup below: the pool has been shrunk since these days were
+  // shown, so re-deriving them from today's (smaller) pool would produce a
+  // different puzzle than what actually happened.
+  const frozen = FROZEN_DAILY_PUZZLES[puzzleNumber];
+  if (frozen) {
+    const frozenPuzzle = buildPuzzleFromEntry(puzzleNumber, date, frozen.boardId, frozen.holeColors, frozen.par);
+    puzzleCache.set(puzzleNumber, frozenPuzzle);
+    return frozenPuzzle;
+  }
+
   const poolIndex = getPoolIndexForPuzzleNumber(puzzleNumber);
   const entry = PUZZLE_POOL[poolIndex];
-  const board = BOARD_CATALOG[entry.boardId];
-  const emptyHoles = getEmptyHolesFromColors(entry.holeColors);
-
-  const holeWord = emptyHoles.length === 1 ? 'hole' : 'holes';
-  const puzzle = {
-    puzzleNumber,
-    date,
-    boardId: board.id,
-    boardName: board.name,
-    geometry: board.geometry,
-    holeColors: entry.holeColors,
-    colorCount: entry.par.length,
-    emptyHoles,
-    label: `${emptyHoles.length} empty ${holeWord}`,
-    par: entry.par,
-    cellCount: board.geometry.cellCount,
-  };
+  const puzzle = buildPuzzleFromEntry(puzzleNumber, date, entry.boardId, entry.holeColors, entry.par);
 
   puzzleCache.set(puzzleNumber, puzzle);
   return puzzle;
