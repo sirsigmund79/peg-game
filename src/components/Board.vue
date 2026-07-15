@@ -43,15 +43,6 @@ const props = defineProps({
     type: Object,
     required: true,
   },
-  // Optional -- story mode only (see logic/story/story.js's
-  // getChapterPuzzle()). Each {index, emoji} hides a glyph under that
-  // hole's starting peg; it's rendered once that hole reads as empty
-  // (see shouldShowPeg() below), same instant the peg above it finishes
-  // dissolving. Left empty, this component behaves exactly as before.
-  friendHoles: {
-    type: Array,
-    default: () => [],
-  },
   // Shrinks the board from its full-size gameplay dimensions down to the
   // result screen's card size (see components/PlayView.vue) -- set once the
   // round is over and its own settle/ripple flourish has played. Purely a
@@ -70,18 +61,14 @@ const props = defineProps({
     type: Array,
     default: null,
   },
-  // Hole index to briefly pulse (ported from the now-retired MiniBoard-only
-  // behavior) -- drives the result screen's sequential score-reveal walk.
-  // -1 means no hole is currently pulsing.
+  // Hole index to briefly pulse -- drives the result screen's sequential
+  // score-reveal walk. -1 means no hole is currently pulsing.
   pulsingIndex: {
     type: Number,
     default: -1,
   },
 });
 
-// Position/size math is shared with MiniBoard.vue (the read-only snapshot
-// in the result modal) via logic/boardLayout.js, so the two never drift
-// apart on how a board shape gets drawn.
 const holePositions = computed(() => computeDisplayPositions(props.game.geometry));
 const holeDiameterPercent = computed(() => computeHoleDiameterPercent(props.game.geometry, holePositions.value));
 
@@ -96,13 +83,6 @@ const maxRippleDistance = computed(() => Math.max(1, ...boardCenterDistances.val
 
 function rippleDelayMs(index) {
   return Math.round((boardCenterDistances.value[index] / maxRippleDistance.value) * RIPPLE_STAGGER_SPAN_MS);
-}
-
-const friendEmojiByIndex = computed(() => new Map(props.friendHoles.map((friend) => [friend.index, friend.emoji])));
-
-/** @returns {string|undefined} the hidden friend's emoji for hole `index`, if any. */
-function friendEmojiAt(index) {
-  return friendEmojiByIndex.value.get(index);
 }
 
 // Whichever masks array is actually on screen right now -- `masksOverride`
@@ -130,6 +110,11 @@ function isValidTarget(index) {
   return interactive.value && props.game.validTargetHoles.includes(index);
 }
 
+/** Whether hole `index`'s ring should render dotted -- Ghost Outline's "you already made this exact jump from this exact board state today" cue (see logic/ghostMoves.js). Purely a memory aid; never a hint about which move is good. */
+function isGhostRepeat(index) {
+  return interactive.value && props.game.ghostRepeatedTargetHoles.includes(index);
+}
+
 /** Whether hole `index` has a peg right now, per `activeMasks`. */
 function holeHasPeg(index) {
   return getColorAt(activeMasks.value, index) !== -1;
@@ -143,7 +128,7 @@ function holeColorIndex(index) {
 /** Builds a human-readable label for screen readers, per hole. */
 function holeAriaLabel(index) {
   const filled = holeHasPeg(index);
-  if (!filled) return friendEmojiAt(index) ? `A friend, revealed, at hole ${index}` : `Empty hole ${index}`;
+  if (!filled) return `Empty hole ${index}`;
   return `${getPegColor(holeColorIndex(index)).name} peg at hole ${index}`;
 }
 
@@ -276,6 +261,7 @@ function handleHoleClick(index) {
           filled: shouldShowPeg(index),
           selected: isSelected(index),
           target: isValidTarget(index),
+          'target-repeat': isGhostRepeat(index),
           pulsing: index === pulsingIndex,
         }"
         :style="{ left: position.left, top: position.top, '--ripple-delay': rippleDelayMs(index) + 'ms' }"
@@ -284,11 +270,6 @@ function handleHoleClick(index) {
         :tabindex="interactive ? undefined : -1"
         @click="handleHoleClick(index)"
       >
-        <Transition name="friend-pop">
-          <span v-if="!shouldShowPeg(index) && friendEmojiAt(index)" class="friend-glyph" aria-hidden="true">{{
-            friendEmojiAt(index)
-          }}</span>
-        </Transition>
         <span
           v-if="shouldShowPeg(index)"
           class="peg"
@@ -472,7 +453,7 @@ function handleHoleClick(index) {
 /* The result screen's sequential score-reveal walk (see
    composables/useResultReveal.js) briefly pulses one hole at a time as it
    ticks that peg's color count up -- this is the "it's this one's turn"
-   cue, ported from the now-retired MiniBoard.vue. */
+   cue. */
 .hole.pulsing .peg {
   animation: hole-pulse 0.3s ease-out;
 }
@@ -529,6 +510,25 @@ function handleHoleClick(index) {
     0 0 0 2px var(--color-accent);
 }
 
+/* Ghost Outline (see logic/ghostMoves.js): a jump already taken from this
+   exact board state today gets a dashed ring instead of the normal solid
+   one -- box-shadow can't render a dash pattern, so this drops the outer
+   box-shadow ring above and draws an actual dashed border on a
+   pseudo-element instead. Purely a memory aid ("have I tried this"), never
+   a signal about whether the move is good. */
+.hole.target.target-repeat {
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.12);
+}
+
+.hole.target.target-repeat::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  border: 2px dashed var(--color-accent);
+  pointer-events: none;
+}
+
 .hole:focus-visible {
   box-shadow:
     inset 0 1px 2px rgba(0, 0, 0, 0.12),
@@ -566,36 +566,6 @@ function handleHoleClick(index) {
     transform 0.3s ease;
   opacity: 0;
   transform: scale(0.35);
-}
-
-.friend-glyph {
-  /* --hole-size is a %-of-board-width custom property (fine for the .hole
-     width/height above, which are also percentages of that same
-     containing block) -- font-size percentages mean something totally
-     different (relative to the inherited font-size), so this is a plain
-     fixed size rather than trying to derive one from --hole-size. Holes
-     across every Forest Trail board land in a similar physical range, so
-     one size reads fine everywhere. */
-  font-size: 1.4rem;
-  line-height: 1;
-  user-select: none;
-}
-
-.friend-pop-enter-active {
-  transition:
-    transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
-    opacity 0.2s ease;
-}
-
-.friend-pop-enter-from {
-  opacity: 0;
-  transform: scale(0.3);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .friend-pop-enter-active {
-    transition: none;
-  }
 }
 
 .travel-slot {

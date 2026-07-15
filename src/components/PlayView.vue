@@ -42,9 +42,11 @@ import { getRankForOverPar } from '../logic/rules.js';
 import { getBestForPuzzle } from '../logic/bestResults.js';
 import { buildShareText } from '../services/viral.js';
 import { EVENTS, track } from '../services/analytics.js';
+import { useGhostOutline } from '../composables/useGhostOutline.js';
 import Board from './Board.vue';
 import StatBar from './StatBar.vue';
 import Controls from './Controls.vue';
+import GhostToggle from './GhostToggle.vue';
 import ResultHeader from './ResultHeader.vue';
 import ResultToggle from './ResultToggle.vue';
 import ResultStatRow from './ResultStatRow.vue';
@@ -55,6 +57,7 @@ import TemporaryWatchSolveButton from './TemporaryWatchSolveButton.vue';
 const isDevBuild = import.meta.env.DEV;
 
 const { route } = useRouter();
+const { ghost } = useGhostOutline();
 
 /** Figures out which puzzle to load: a hand-off from the editor, a specific "#/play/N", or today's. */
 function resolvePuzzle() {
@@ -97,6 +100,9 @@ function reportIncompleteIfNeeded() {
     puzzle_number: puzzle.value.puzzleNumber ?? null,
     move_count: currentGame.state.moveCount,
     time_spent_ms: Date.now() - currentGame.state.roundStartedAt,
+    repeat_move_count: currentGame.state.repeatMoveCount,
+    cumulative_move_count: currentGame.state.cumulativeMoveCount,
+    ghost_outline_used: currentGame.state.ghostOutlineUsedThisPuzzle,
   });
 }
 
@@ -386,6 +392,7 @@ onBeforeUnmount(() => {
       <TemporaryWatchSolveButton v-if="isDevBuild" :game="game" />
     </div>
 
+    <GhostToggle v-if="ghost.flagEnabled && ghost.discovered && !game.roundOver" />
     <Controls
       v-if="!game.roundOver"
       :can-undo="game.state.undoStack.length > 0"

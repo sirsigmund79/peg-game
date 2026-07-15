@@ -53,26 +53,50 @@ centralizes sharing. Two ground rules shaped what's here:
 | `puzzle_started` | A round is created (`useGame.js`) | `puzzle_number`, `puzzle_date`, `board_shape`, `color_count`, `par_total`, `source` (`daily`\|`link`\|`custom`), `already_played` |
 | `puzzle_first_move` | First jump of a round | `puzzle_number` |
 | `puzzle_undo_used` | Undo pressed | `puzzle_number`, `move_count_before_undo` |
-| `puzzle_reset_used` | Reset pressed after ≥1 move | `puzzle_number`, `move_count_before_reset` |
-| `puzzle_completed` | Round ends, any outcome | `puzzle_number`, `puzzle_date`, `board_shape`, `color_count`, `won`, `rank`, `over_par`, `move_count`, `undo_count`, `reset_count`, `duration_ms`, `source` |
-| `puzzle_left_incomplete` | Player leaves mid-round (route away, tab hidden, or tab closed) — fires once per round | `puzzle_number`, `move_count`, `time_spent_ms` |
+| `puzzle_reset_used` | Reset pressed after ≥1 move | `puzzle_number`, `move_count_before_reset`, `repeat_move_count`, `cumulative_move_count`, `ghost_outline_used` |
+| `puzzle_completed` | Round ends, any outcome | `puzzle_number`, `puzzle_date`, `board_shape`, `color_count`, `won`, `rank`, `over_par`, `move_count`, `undo_count`, `reset_count`, `duration_ms`, `source`, `repeat_move_count`, `cumulative_move_count`, `ghost_outline_used` |
+| `puzzle_left_incomplete` | Player leaves mid-round (route away, tab hidden, or tab closed) — fires once per round | `puzzle_number`, `move_count`, `time_spent_ms`, `repeat_move_count`, `cumulative_move_count`, `ghost_outline_used` |
 | `share_clicked` | "Challenge A Friend" tapped | `puzzle_number`, `rank`, `won`, `over_par` |
 | `share_copy_result` | Clipboard copy resolves | `puzzle_number`, `success` |
 | `archive_puzzle_selected` | A day picked from the archive | `puzzle_number`, `days_ago`, `already_played`, `is_today` |
 | `stats_nav_clicked` | Header's Stats icon tapped (`App.vue`) | — |
 | `stats_archive_cta_clicked` | "Check out the Archive" tapped on the stats page (`StatsView.vue`) | — |
 | `badge_unlocked` | A badge's unlock condition (see `logic/badges.js`) is newly satisfied | `badge_id`, `puzzle_number` |
+| `ghost_outline_baseline_captured` | Once per browser, on the first app boot after this instrumentation ships (`initAnalytics()`) | `baseline_genius_rate`, `baseline_lifetime_puzzles_completed`, `baseline_current_streak_days` |
 | `$exception` | Any uncaught error/rejection | message, stack, `app_env` |
 
 Person properties (set on every `puzzle_completed`, from
 `syncPlayerStatsToPostHog()`): `lifetime_puzzles_completed`, `lifetime_wins`,
 `lifetime_genius_rate`, `current_streak_days`, `longest_streak_days`.
 
+Person properties set **once** (PostHog `$set_once` — locked in forever at
+whatever they were the first time, never touched again):
+- `baseline_genius_rate`, `baseline_lifetime_puzzles_completed`,
+  `baseline_current_streak_days`, `baseline_captured_at` — see
+  `captureGhostOutlineBaselineOnce()` in `services/analytics.js`. A frozen
+  "before Ghost Outline could have influenced anything" snapshot, since the
+  live `lifetime_genius_rate` above keeps updating forever and can't answer
+  "was this originally a struggling player" once someone's used the feature
+  a while.
+- `ghost_outline_ever_disabled` — set the first time a player ever turns
+  their own Ghost Outline toggle off.
+- `ghost_outline_ever_re_enabled` — set the first time a player turns it
+  back on after having disabled it. Can only ever be set after
+  `ghost_outline_ever_disabled` already is (the toggle starts on by
+  default), so together these two answer "did they ever touch it" and "did
+  they come back to it."
+
+**Launching Ghost Outline for real players**: it ships fully dark behind
+`GHOST_OUTLINE_ENABLED` in `logic/featureFlags.js` — a hardcoded constant,
+not a PostHog Feature Flag. Flip it to `true` and deploy; that's the entire
+rollout mechanism, no PostHog dashboard configuration needed. Because it's
+one constant in one build, it goes from 0% to 100% of players in a single
+instant — see Dashboard 6 below for why that's actually convenient for
+analysis, not a limitation.
+
 **Deliberately not instrumented:** the level editor and `#/dev` tools are
 excluded from production builds entirely (`import.meta.env.DEV`), so there's
-no prod data to gain. The hidden `#/story` Forest Trail prototype has no nav
-link and isn't reachable by real players — instrument it if/when it actually
-ships, not as a prototype nobody can find.
+no prod data to gain.
 
 Also: shared result links now carry a `?ref=share` query param (see
 `services/viral.js`) — the only way to tell "a visit that came from someone
@@ -204,6 +228,56 @@ players value.
 `lifetime_puzzles_completed`, histogram view. People & Cohorts → New Cohort
 → filter on that same property. Then re-run the funnel/retention insights
 above with "Add filter → Cohort" to compare.
+
+### 6. Ghost Outline — did it work?
+
+**Why:** this game's traffic is too low for a between-group A/B test to
+reach significance in any reasonable time, so this is a **within-user
+before/after** comparison instead — the same players, compared to their own
+past selves. Because `GHOST_OUTLINE_ENABLED` (`logic/featureFlags.js`) is
+one hardcoded constant shipped in one build, every player gets it at the
+exact same instant — there's no staggered rollout to account for, which
+makes this simpler than it sounds: an ordinary calendar-time Trends chart,
+split at the deploy date, **is** the before/after comparison. No "days since
+each player's own exposure" bookkeeping needed.
+
+**A note on sample size**, same caveat as "Future experiments" below: with
+small daily numbers, look at trends over weeks, not days, before drawing any
+conclusion from a bend in a line.
+
+**Insights to add:**
+- Formula insight on `puzzle_completed`: `sum(repeat_move_count) /
+  sum(cumulative_move_count)`, trended daily or weekly. **Don't** average a
+  precomputed ratio across events instead — that over-weights low-move
+  puzzles. Optionally filter to `ghost_outline_used = true` to isolate
+  puzzles where the feature was actually visible.
+- Trend: `reset_count` (average, on `puzzle_completed`) — "resets per
+  puzzle," before vs. after the flip date.
+- Trend: `lifetime_genius_rate` distribution, before vs. after.
+- Retention insight (same setup as Dashboard 3), compared before vs. after
+  the flip date.
+- Trend: `duration_ms` average and `puzzle_completed` count per day, before
+  vs. after — the "time on site / puzzles played" pair.
+- Two saved Cohorts off `baseline_genius_rate` (e.g. `< 0.2` vs. `>= 0.2`) —
+  re-run every insight above filtered to each cohort separately, to see
+  whether players who were originally struggling benefit more.
+- Trend: count of `ghost_outline_ever_disabled` / `ghost_outline_ever_re_enabled`
+  person properties being `true`, as a rough friction signal — "% of players
+  who ever turned it off" is a cheap proxy for "did this actually bother
+  people," independent of whether it moved the metrics above.
+
+**If you want more statistical rigor than a trend line later:** every
+number needed for a proper paired before/after test (per-user, not just
+per-population) already exists in the raw event stream — export
+`puzzle_completed` (with `repeat_move_count`, `cumulative_move_count`,
+`reset_count`, `duration_ms`) to CSV and run a paired analysis
+(e.g. Wilcoxon signed-rank on each player's own before vs. after average) in
+a spreadsheet or notebook. Not necessary to set up now — the data just needs
+to keep accumulating so it's there if wanted later.
+
+**Setup:** Insights → New → Trends, Formula mode for the ratio; plain Trends
+for the rest. People & Cohorts → New Cohort → filter on `baseline_genius_rate`
+for the two segments.
 
 ## Future experiments
 

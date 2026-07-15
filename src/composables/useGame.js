@@ -31,6 +31,8 @@ import { getFinishedMasks, recordRoundFinished, clearRoundFinished } from '../lo
 import { recordPegCleared, recordPlaythroughEnded, recordGiveUpReset, recordGeniusReached } from '../logic/badgeStats.js';
 import { isGiveUpReset } from '../logic/attemptBoundary.js';
 import { checkForNewlyUnlockedBadges } from '../logic/badgeUnlocks.js';
+import { encodeMasks, moveKey, getSeenMoveKeys, recordMoveSeen } from '../logic/ghostMoves.js';
+import { useGhostOutline } from './useGhostOutline.js';
 import { EVENTS, track, syncPlayerStatsToPostHog } from '../services/analytics.js';
 
 function sum(numbers) {
@@ -49,6 +51,7 @@ export function useGame(puzzle, options = {}) {
   const geometry = puzzle.geometry;
   const startingMasks = createStartingMasks(puzzle.cellCount, puzzle.holeColors, puzzle.colorCount);
   const source = options.source ?? 'daily';
+  const { ghost } = useGhostOutline();
 
   // If this puzzle's last round finished and hasn't been Reset since (see
   // logic/roundState.js), resume showing that exact board instead of the
@@ -75,6 +78,14 @@ export function useGame(puzzle, options = {}) {
     // always starts them clean.
     undoCount: 0,
     resetCount: 0,
+    // Ghost Outline analytics-only bookkeeping (see logic/featureFlags.js
+    // and services/analytics.js) -- same "not reset by reset()" treatment
+    // as undoCount/resetCount above, since these are meant to answer "for
+    // this PUZZLE today" (spanning every give-up Reset), not "this single
+    // attempt."
+    repeatMoveCount: 0, // jumps that repeated an already-seen (state, move) pair today
+    cumulativeMoveCount: 0, // total jumps made on this puzzle today, across every attempt
+    ghostOutlineUsedThisPuzzle: false, // was Ghost Outline actually visible for at least one jump today
     roundStartedAt: Date.now(),
     firstMoveTracked: false,
     incompleteReported: false,
@@ -105,17 +116,12 @@ export function useGame(puzzle, options = {}) {
   // meaningful across boards with different color counts/par totals.
   const overPar = computed(() => sum(pegsRemaining.value) - sum(puzzle.par));
 
-  // The player has WON once no moves remain AND either:
-  //  - this puzzle hides friends (see logic/story/story.js's
-  //    getChapterPuzzle()) and every friend's hole has lost its peg, or
-  //  - (the normal/daily game) every color matches this exact puzzle's
-  //    solver-proven target.
-  // If the round is over but neither holds, that's a loss (they got stuck
-  // early, a friend's hole is still covered, or a color settled higher
-  // than optimal).
+  // The player has WON once no moves remain AND every color matches this
+  // exact puzzle's solver-proven target. If the round is over but that
+  // doesn't hold, that's a loss (they got stuck early, or a color settled
+  // higher than optimal).
   const hasWon = computed(() => {
     if (!roundOver.value) return false;
-    if (puzzle.friendHoles) return puzzle.friendHoles.every((index) => !holeHasPeg(index));
     return pegsRemaining.value.every((count, colorIndex) => count === puzzle.par[colorIndex]);
   });
 
@@ -133,6 +139,19 @@ export function useGame(puzzle, options = {}) {
   // Just the landing-hole side of validMoves, for the common case of
   // "which holes should light up".
   const validTargetHoles = computed(() => validMoves.value.map((move) => move.to));
+
+  // Ghost Outline (see logic/ghostMoves.js): which of the SELECTED peg's
+  // valid landing holes correspond to a jump already taken from this exact
+  // board state, today -- Board.vue draws these with a dotted ring instead
+  // of a solid one. Gated on the feature's own on/off switch here (not in
+  // Board.vue) so Board.vue never needs to know this feature exists beyond
+  // reading one more array, same as validTargetHoles.
+  const ghostRepeatedTargetHoles = computed(() => {
+    if (!ghost.flagEnabled || !ghost.enabled || state.selectedHole === null) return [];
+    const stateKey = encodeMasks(state.masks);
+    const seenKeys = getSeenMoveKeys(puzzle.puzzleNumber, stateKey);
+    return validMoves.value.filter((move) => seenKeys.includes(moveKey(move))).map((move) => move.to);
+  });
 
   /** @returns {boolean} true if hole `index` currently has a peg (of any color). */
   function holeHasPeg(index) {
@@ -197,6 +216,29 @@ export function useGame(puzzle, options = {}) {
     // Read the jumped-over peg's color BEFORE applying the move -- once
     // applyMove() removes it, there's nothing left at `move.over` to ask.
     const clearedColor = getColorAt(state.masks, move.over);
+    // Ghost Outline bookkeeping (see logic/ghostMoves.js) -- keyed on the
+    // state BEFORE this jump, since that's the state the player was looking
+    // at when they chose it. Deliberately never called from reset() -- this
+    // is what makes the "already tried" memory survive a same-day Reset.
+    // Runs UNCONDITIONALLY, regardless of logic/featureFlags.js's
+    // GHOST_OUTLINE_ENABLED -- this is what banks a "before" analytics
+    // baseline even while the feature itself stays fully dark.
+    if (puzzle.puzzleNumber !== null) {
+      const stateKeyBeforeJump = encodeMasks(state.masks);
+      const takenKey = moveKey(move);
+      if (getSeenMoveKeys(puzzle.puzzleNumber, stateKeyBeforeJump).includes(takenKey)) {
+        state.repeatMoveCount += 1;
+      }
+      state.cumulativeMoveCount += 1;
+      // Unlike the counters above, this one DOES check both gates -- it's
+      // not "is the feature live," it's "could this player actually have
+      // seen a ring just now" (accounts for a player who's personally
+      // toggled their own switch off even while the feature is live).
+      if (ghost.flagEnabled && ghost.enabled) {
+        state.ghostOutlineUsedThisPuzzle = true;
+      }
+      recordMoveSeen(puzzle.puzzleNumber, stateKeyBeforeJump, takenKey);
+    }
     state.undoStack.push(state.masks);
     state.masks = applyMove(state.masks, move);
     if (puzzle.puzzleNumber !== null) recordPegCleared(clearedColor);
@@ -251,6 +293,9 @@ export function useGame(puzzle, options = {}) {
         reset_count: state.resetCount,
         duration_ms: Date.now() - state.roundStartedAt,
         source,
+        repeat_move_count: state.repeatMoveCount,
+        cumulative_move_count: state.cumulativeMoveCount,
+        ghost_outline_used: state.ghostOutlineUsedThisPuzzle,
       });
     }
   }
@@ -279,7 +324,13 @@ export function useGame(puzzle, options = {}) {
     // is frustrated" signal -- it's just clearing an idle selection, or a
     // stray tap. Only worth recording once there was actual progress to give up.
     if (state.moveCount > 0) {
-      track(EVENTS.PUZZLE_RESET_USED, { puzzle_number: puzzle.puzzleNumber ?? null, move_count_before_reset: state.moveCount });
+      track(EVENTS.PUZZLE_RESET_USED, {
+        puzzle_number: puzzle.puzzleNumber ?? null,
+        move_count_before_reset: state.moveCount,
+        repeat_move_count: state.repeatMoveCount,
+        cumulative_move_count: state.cumulativeMoveCount,
+        ghost_outline_used: state.ghostOutlineUsedThisPuzzle,
+      });
       state.resetCount += 1;
     }
 
@@ -296,6 +347,9 @@ export function useGame(puzzle, options = {}) {
     // loads, it should start fresh rather than resuming the result screen
     // -- see logic/roundState.js.
     if (puzzle.puzzleNumber != null) clearRoundFinished(puzzle.puzzleNumber);
+    // Deliberately NOT clearing logic/ghostMoves.js's "already tried" record
+    // here -- Ghost Outline is meant to survive a same-day Reset, and only
+    // resets itself when the puzzle number changes (a new day).
     state.masks = startingMasks;
     state.selectedHole = null;
     state.lastMove = null;
@@ -321,6 +375,7 @@ export function useGame(puzzle, options = {}) {
     rank,
     validMoves,
     validTargetHoles,
+    ghostRepeatedTargetHoles,
     // True when this instance was created already sitting on a finished
     // round restored from logic/roundState.js, rather than having finished
     // during this instance's lifetime -- components/PlayView.vue uses this

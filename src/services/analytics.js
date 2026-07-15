@@ -18,6 +18,7 @@ import posthog from 'posthog-js';
 import { getHistory } from '../logic/history.js';
 import { getTodayPuzzleNumber } from '../logic/daily.js';
 import { computeStreaks } from '../logic/streaks.js';
+import { isGhostBaselineCaptured, markGhostBaselineCaptured } from '../logic/ghostSettings.js';
 
 /** Every custom event name this app fires, in one place so call sites never hand-type a string. */
 export const EVENTS = {
@@ -35,6 +36,7 @@ export const EVENTS = {
   STATS_NAV_CLICKED: 'stats_nav_clicked',
   STATS_ARCHIVE_CTA_CLICKED: 'stats_archive_cta_clicked',
   BADGE_UNLOCKED: 'badge_unlocked',
+  GHOST_OUTLINE_BASELINE_CAPTURED: 'ghost_outline_baseline_captured',
 };
 
 let isInitialized = false;
@@ -84,6 +86,13 @@ export function initAnalytics() {
   });
 
   isInitialized = true;
+
+  // One-time, not gated on Ghost Outline's own on/off flag (see
+  // logic/featureFlags.js) -- every player gets a "before" snapshot banked
+  // the moment this ships, regardless of when (or whether) the feature
+  // itself ever launches for them. See captureGhostOutlineBaselineOnce()
+  // below for why this can't just reuse the live lifetime_genius_rate.
+  captureGhostOutlineBaselineOnce();
 }
 
 /** Fires a custom event. Safe to call even if init() never ran or PostHog's script got blocked. */
@@ -112,27 +121,89 @@ export function trackError(error) {
 
 /**
  * Recomputes this device's lifetime stats from logic/history.js (which
- * already records every completed daily puzzle locally) and pushes them as
- * PostHog person properties. Call after every puzzle_completed. Turns
- * "power user" segmentation into a plain person-property filter in PostHog
- * instead of a custom cohort query -- see Dashboard 5 in docs/ANALYTICS.md.
+ * already records every completed daily puzzle locally). Returns null if
+ * nothing has ever been completed (a brand-new player) rather than dividing
+ * by zero. Shared by syncPlayerStatsToPostHog() (the live, ever-updating
+ * numbers) and captureGhostOutlineBaselineOnce() (a one-time, frozen
+ * snapshot of the same shape) so the calculation only lives in one place.
  */
-export function syncPlayerStatsToPostHog() {
-  if (!isInitialized) return;
-
+function computeLifetimeStats() {
   const history = getHistory();
   const results = Object.values(history);
-  if (results.length === 0) return;
+  if (results.length === 0) return null;
 
   const lifetimePuzzlesCompleted = results.length;
   const lifetimeWins = results.filter((result) => result.won).length;
   const { current, longest } = computeStreaks(Object.keys(history).map(Number), getTodayPuzzleNumber());
 
+  return {
+    lifetimePuzzlesCompleted,
+    lifetimeWins,
+    geniusRate: Number((lifetimeWins / lifetimePuzzlesCompleted).toFixed(3)),
+    currentStreakDays: current,
+    longestStreakDays: longest,
+  };
+}
+
+/**
+ * Pushes this device's lifetime stats as PostHog person properties. Call
+ * after every puzzle_completed. Turns "power user" segmentation into a
+ * plain person-property filter in PostHog instead of a custom cohort query
+ * -- see Dashboard 5 in docs/ANALYTICS.md.
+ */
+export function syncPlayerStatsToPostHog() {
+  if (!isInitialized) return;
+
+  const stats = computeLifetimeStats();
+  if (!stats) return;
+
   posthog.setPersonProperties({
-    lifetime_puzzles_completed: lifetimePuzzlesCompleted,
-    lifetime_wins: lifetimeWins,
-    lifetime_genius_rate: Number((lifetimeWins / lifetimePuzzlesCompleted).toFixed(3)),
-    current_streak_days: current,
-    longest_streak_days: longest,
+    lifetime_puzzles_completed: stats.lifetimePuzzlesCompleted,
+    lifetime_wins: stats.lifetimeWins,
+    lifetime_genius_rate: stats.geniusRate,
+    current_streak_days: stats.currentStreakDays,
+    longest_streak_days: stats.longestStreakDays,
   });
+}
+
+/**
+ * One-time, per-browser snapshot of this device's lifetime stats, taken
+ * BEFORE Ghost Outline can have influenced anything -- see
+ * logic/featureFlags.js. Unlike lifetime_genius_rate above (which keeps
+ * updating forever), these `baseline_*` person properties are written via
+ * PostHog's $set_once semantics (the second argument to
+ * setPersonProperties()), so whatever they were the first time this ran is
+ * what they stay -- the whole point is a frozen "before" value to segment
+ * players by later (e.g. "was this originally a struggling player"),
+ * something a continuously-updating number can't answer once players have
+ * had the feature a while. Guarded by logic/ghostSettings.js's one-way
+ * `baselineCaptured` flag so this can safely be called on every app boot
+ * but only ever actually sends data once.
+ */
+export function captureGhostOutlineBaselineOnce() {
+  if (!isInitialized || isGhostBaselineCaptured()) return;
+
+  const stats = computeLifetimeStats();
+  const properties = {
+    baseline_genius_rate: stats?.geniusRate ?? null,
+    baseline_lifetime_puzzles_completed: stats?.lifetimePuzzlesCompleted ?? 0,
+    baseline_current_streak_days: stats?.currentStreakDays ?? 0,
+    baseline_captured_at: new Date().toISOString(),
+  };
+
+  posthog.setPersonProperties({}, properties);
+  track(EVENTS.GHOST_OUTLINE_BASELINE_CAPTURED, properties);
+  markGhostBaselineCaptured();
+}
+
+/** Records, once per browser lifetime, that the player turned Ghost Outline off at least once -- see composables/useGhostOutline.js's setEnabled(). */
+export function trackGhostOutlineDisabled() {
+  if (!isInitialized) return;
+  posthog.setPersonProperties({}, { ghost_outline_ever_disabled: true });
+}
+
+/** Records, once per browser lifetime, that the player turned Ghost Outline back on after having disabled it -- see composables/useGhostOutline.js's setEnabled(). */
+export function trackGhostOutlineReEnabled() {
+  if (!isInitialized) return;
+  posthog.setPersonProperties({}, { ghost_outline_ever_re_enabled: true });
 }

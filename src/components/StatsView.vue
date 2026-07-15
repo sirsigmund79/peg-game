@@ -48,9 +48,11 @@ import { computeStreaks } from '../logic/streaks.js';
 import { getAllBestResults } from '../logic/bestResults.js';
 import { RANK_TIERS, getRankForOverPar } from '../logic/rules.js';
 import { useRouter } from '../composables/useRouter.js';
+import { useGhostOutline } from '../composables/useGhostOutline.js';
 import { EVENTS, track } from '../services/analytics.js';
 
 const { navigate } = useRouter();
+const { ghost, discover } = useGhostOutline();
 
 function handleArchiveCtaClick() {
   track(EVENTS.STATS_ARCHIVE_CTA_CLICKED, {});
@@ -115,6 +117,26 @@ const maxRankCount = Math.max(1, ...rankBars.map((bar) => bar.count));
         <span class="archive-cta-icon" aria-hidden="true">📅</span>
         <span class="archive-cta-label">Check out the Archive</span>
       </button>
+    </div>
+
+    <!-- The discovery mechanism for Ghost Outline (see
+         composables/useGhostOutline.js): always here for anyone who scrolls
+         this far, but the in-game toggle (components/GhostToggle.vue) stays
+         hidden until this is tapped once. Not a live mirror of the feature's
+         on/off state -- see that composable's header comment. -->
+    <div v-if="ghost.flagEnabled" class="ghost-secret">
+      <button v-if="!ghost.discovered" type="button" class="ghost-secret-teaser" @click="discover()">
+        <span class="ghost-secret-icon" aria-hidden="true">👻</span>
+        <span class="ghost-secret-text">psst... want to try a super secret experimental feature?</span>
+      </button>
+      <div v-else class="ghost-secret-found">
+        <span class="ghost-secret-icon" aria-hidden="true">👻</span>
+        <p class="ghost-secret-text">
+          <strong>Ghost Outline:</strong> when you select a peg in-game, its possible jumps get a preview ring --
+          dotted if you've already made that exact jump from that exact board today, solid if you haven't. Just a
+          memory aid, never a hint. Find the toggle for it beneath the board.
+        </p>
+      </div>
     </div>
   </div>
 </template>
@@ -273,5 +295,56 @@ const maxRankCount = Math.max(1, ...rankBars.map((bar) => bar.count));
   font-weight: 800;
   font-size: 0.95rem;
   color: var(--color-card-bg);
+}
+
+.ghost-secret {
+  margin-top: 28px;
+  text-align: center;
+}
+
+.ghost-secret-teaser {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  opacity: 0.55;
+  -webkit-tap-highlight-color: transparent;
+  transition: opacity 0.15s ease;
+}
+
+.ghost-secret-teaser:hover,
+.ghost-secret-teaser:focus-visible {
+  opacity: 0.9;
+}
+
+.ghost-secret-found {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  max-width: 360px;
+  margin: 0 auto;
+  padding: 14px;
+  text-align: left;
+  background: var(--color-card-bg);
+  border: var(--frame-border);
+  border-radius: 14px;
+  box-shadow: var(--frame-shadow-card);
+}
+
+.ghost-secret-icon {
+  flex: none;
+  font-size: 1.1rem;
+  line-height: 1.3;
+}
+
+.ghost-secret-text {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: 0.76rem;
+  line-height: 1.4;
+  color: var(--color-ink-secondary);
 }
 </style>
