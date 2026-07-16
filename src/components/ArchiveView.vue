@@ -117,7 +117,7 @@ function playPuzzle(puzzleNumber) {
 
 <template>
   <div class="archive-view">
-    <p class="archive-intro">The last {{ ARCHIVE_WINDOW_DAYS }} days of puzzles. Pick a day to play or replay it.</p>
+    <p class="archive-intro">Plenty of past puzzles for you to play</p>
     <p class="countdown-note">Next puzzle in {{ countdownToNextPuzzle }}</p>
 
     <section v-for="group in monthGroups" :key="group.label" class="month-group">

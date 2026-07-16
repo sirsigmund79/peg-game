@@ -47,6 +47,14 @@ centralizes sharing. Two ground rules shaped what's here:
   `logic/history.js`'s already-existing local play history — see
   `syncPlayerStatsToPostHog()`.
 
+**Filtering out internal traffic.** Open the app with `?internal` anywhere in
+the URL (e.g. `https://dothopper.example/?internal`) and every event that
+browser sends for the rest of the session carries `is_internal: true` (see
+`initAnalytics()`) — filter it out of real-player dashboards with an
+`is_internal is not true` base filter. Simpler than a second PostHog project
+for this specifically, since it's just for internal/tester traffic, not the
+dev-vs-production split `app_env` already covers.
+
 | Event | Fired when | Key properties |
 |---|---|---|
 | `$pageview` (manual) | Any route change (`App.vue`) | `page`, `puzzle_number` |
@@ -63,6 +71,8 @@ centralizes sharing. Two ground rules shaped what's here:
 | `stats_archive_cta_clicked` | "Check out the Archive" tapped on the stats page (`StatsView.vue`) | — |
 | `badge_unlocked` | A badge's unlock condition (see `logic/badges.js`) is newly satisfied | `badge_id`, `puzzle_number` |
 | `ghost_outline_baseline_captured` | Once per browser, on the first app boot after this instrumentation ships (`initAnalytics()`) | `baseline_genius_rate`, `baseline_lifetime_puzzles_completed`, `baseline_current_streak_days` |
+| `how_to_play_shown` | The How to Play modal opens, via the header's "?" button — never shown automatically (`useHowToPlay.js`) | — |
+| `how_to_play_dismissed` | The How to Play modal closes | `source` (`manual`\|`backdrop`\|`escape`) |
 | `$exception` | Any uncaught error/rejection | message, stack, `app_env` |
 
 Person properties (set on every `puzzle_completed`, from

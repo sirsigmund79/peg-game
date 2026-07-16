@@ -37,6 +37,8 @@ export const EVENTS = {
   STATS_ARCHIVE_CTA_CLICKED: 'stats_archive_cta_clicked',
   BADGE_UNLOCKED: 'badge_unlocked',
   GHOST_OUTLINE_BASELINE_CAPTURED: 'ghost_outline_baseline_captured',
+  HOW_TO_PLAY_SHOWN: 'how_to_play_shown',
+  HOW_TO_PLAY_DISMISSED: 'how_to_play_dismissed',
 };
 
 let isInitialized = false;
@@ -77,6 +79,15 @@ export function initAnalytics() {
   // sets up one PostHog project instead of the two recommended in
   // docs/ANALYTICS.md.
   posthog.register({ app_env: import.meta.env.PROD ? 'production' : 'development' });
+
+  // Visiting with `?internal` in the URL (e.g. a link only the dev/testers
+  // ever use) tags every event this browser sends, from here on, with
+  // `is_internal: true` -- so real-player dashboards can filter internal
+  // testing traffic out of the single production project without a second
+  // PostHog project just for that.
+  if (new URLSearchParams(window.location.search).has('internal')) {
+    posthog.register({ is_internal: true });
+  }
 
   window.addEventListener('error', (event) => {
     trackError(event.error ?? event.message);

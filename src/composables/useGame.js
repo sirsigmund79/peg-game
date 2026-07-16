@@ -23,7 +23,7 @@ import {
   countPegsRemaining,
   getRankForOverPar,
 } from '../logic/rules.js';
-import { vibrateJump, vibrateRoundOver } from '../fx/haptics.js';
+import { vibrateJump, vibrateRoundOver, vibrateInvalid } from '../fx/haptics.js';
 import { playRoundOverChime } from '../fx/sound.js';
 import { recordResult, getResultForPuzzle } from '../logic/history.js';
 import { recordBestIfBetter } from '../logic/bestResults.js';
@@ -72,6 +72,12 @@ export function useGame(puzzle, options = {}) {
     // every time (never mutated in place) so Board.vue can watch it and
     // replay the "peg travels over, jumped peg dissolves" animation.
     lastMove: null,
+    // The most recent tap that tried (and failed) to land a selected peg
+    // somewhere it can't legally go -- a fresh object every time (never
+    // mutated in place, same reasoning as lastMove) so Board.vue can watch
+    // it and play a one-shot "nope" shake on the peg that tried to move.
+    // Purely a feel cue; never affects game state itself.
+    invalidAttempt: null,
     // Analytics-only bookkeeping (see services/analytics.js's puzzle_completed
     // event) -- kept here rather than as loose module-level variables so a
     // fresh useGame() call (a new puzzle, or a re-visit of the same one)
@@ -191,13 +197,24 @@ export function useGame(puzzle, options = {}) {
     // Otherwise: if it's a peg, select it (or switch selection to it). If
     // it's an empty hole with no relevance right now, ignore the tap --
     // unless a peg WAS selected, in which case the player just tried an
-    // illegal jump (a different color, or nothing to jump over), which is
-    // worth a distinct "nope" sound.
+    // illegal jump (a different color in the way, or nothing to jump over
+    // at all) -- that's worth a distinct "nope" cue (see
+    // `state.invalidAttempt` above and Board.vue's shake animation) rather
+    // than just silently clearing the selection.
     if (holeHasPeg(index)) {
       state.selectedHole = index;
     } else {
+      if (state.selectedHole !== null) {
+        state.invalidAttempt = { pegIndex: state.selectedHole, targetIndex: index };
+        vibrateInvalid();
+      }
       state.selectedHole = null;
     }
+  }
+
+  /** Clears the current selection without attempting a jump -- e.g. Board.vue calls this when the player taps outside the board entirely. */
+  function deselect() {
+    state.selectedHole = null;
   }
 
   /** Finds the "over" hole for a from -> to jump, using the board's move list. */
@@ -385,6 +402,7 @@ export function useGame(puzzle, options = {}) {
     holeHasPeg,
     getHoleColor,
     selectHole,
+    deselect,
     undo,
     reset,
   });

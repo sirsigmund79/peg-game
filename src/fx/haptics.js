@@ -28,3 +28,10 @@ export function vibrateRoundOver() {
     navigator.vibrate([20, 40, 20, 40, 60]);
   }
 }
+
+/** A short double-tap "nope" buzz -- distinct from vibrateJump()'s single buzz -- for a tap that tried to jump into an illegal hole (see useGame.js's `state.invalidAttempt`). */
+export function vibrateInvalid() {
+  if (canVibrate()) {
+    navigator.vibrate([12, 50, 12]);
+  }
+}

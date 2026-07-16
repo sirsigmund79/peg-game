@@ -31,10 +31,11 @@
   ============================================================================
 -->
 <script setup>
-import { computed, reactive, ref, watch, onBeforeUnmount } from 'vue';
+import { computed, reactive, ref, watch, onMounted, onBeforeUnmount } from 'vue';
 import { computeDisplayPositions, computeHoleDiameterPercent } from '../logic/boardLayout.js';
 import { getPegColor } from '../logic/pegColors.js';
 import { getColorAt } from '../logic/rules.js';
+import { animateArc } from '../fx/jumpAnimation.js';
 
 const props = defineProps({
   // A useGame() instance -- see composables/useGame.js. Passed as a whole
@@ -115,6 +116,11 @@ function isGhostRepeat(index) {
   return interactive.value && props.game.ghostRepeatedTargetHoles.includes(index);
 }
 
+/** Whether hole `index` is an EMPTY hole the selected peg can't reach right now -- every empty hole except the (possibly zero) legal landing spots. Gently greyed out so it's obvious at a glance which open spaces are actually in play, not just which ones are. */
+function isBlocked(index) {
+  return interactive.value && props.game.state.selectedHole !== null && !holeHasPeg(index) && !isValidTarget(index);
+}
+
 /** Whether hole `index` has a peg right now, per `activeMasks`. */
 function holeHasPeg(index) {
   return getColorAt(activeMasks.value, index) !== -1;
@@ -148,9 +154,9 @@ function pegColorAt(index) {
 }
 
 // --- jump animation: a peg travels over the jumped peg, which dissolves --
-
-const JUMP_DURATION_MS = 320;
-const ARC_HEIGHT_PERCENT = 7; // how high (in board %) the peg lifts mid-flight
+// The actual arc tween lives in fx/jumpAnimation.js -- shared with
+// components/HowToPlayModal.vue's demo boards, so a tutorial jump is never
+// out of sync with what a real jump here looks/feels like.
 
 // The move currently being animated ({from, over, to}), or null the rest
 // of the time. While set, the `to` hole's peg is hidden (it hasn't
@@ -169,42 +175,30 @@ const travel = reactive({ leftPercent: 0, topPercent: 0, scale: 1 });
 
 const prefersReducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
-let rafId = null;
-
-function easeInOutQuad(t) {
-  return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
-}
+let cancelArc = null;
 
 function animateJump(move) {
   const fromPos = holePositions.value[move.from];
   const toPos = holePositions.value[move.to];
   if (!fromPos || !toPos) return;
 
-  if (rafId !== null) cancelAnimationFrame(rafId);
+  cancelArc?.();
   animatingMove.value = move;
   animatingColorHex.value = pegColorAt(move.to);
 
-  const startTime = performance.now();
-  function step(now) {
-    const t = Math.min(1, (now - startTime) / JUMP_DURATION_MS);
-    const eased = easeInOutQuad(t);
-    const lift = Math.sin(eased * Math.PI); // 0 at both ends, peaks mid-flight
-
-    travel.leftPercent = fromPos.x + (toPos.x - fromPos.x) * eased;
-    travel.topPercent = fromPos.y + (toPos.y - fromPos.y) * eased - lift * ARC_HEIGHT_PERCENT;
-    // A subtle grow-then-shrink, echoing the "lifted toward the player"
-    // language used for peg selection -- the peg reads as briefly closer
-    // to the viewer at the peak of its arc, not just sliding sideways.
-    travel.scale = 1 + lift * 0.22;
-
-    if (t < 1) {
-      rafId = requestAnimationFrame(step);
-    } else {
-      rafId = null;
+  cancelArc = animateArc({
+    fromPos,
+    toPos,
+    onFrame: ({ leftPercent, topPercent, scale }) => {
+      travel.leftPercent = leftPercent;
+      travel.topPercent = topPercent;
+      travel.scale = scale;
+    },
+    onDone: () => {
+      cancelArc = null;
       animatingMove.value = null;
-    }
-  }
-  rafId = requestAnimationFrame(step);
+    },
+  });
 }
 
 watch(
@@ -220,8 +214,30 @@ watch(
 );
 
 onBeforeUnmount(() => {
-  if (rafId !== null) cancelAnimationFrame(rafId);
+  cancelArc?.();
+  if (shakeTimeoutId !== null) clearTimeout(shakeTimeoutId);
+  document.removeEventListener('click', handleNonHoleClick);
 });
+
+// --- the "nope" shake: a one-shot cue on the peg that just tried (and
+// failed) to jump somewhere illegal -- see useGame.js's `state.invalidAttempt`.
+
+const SHAKE_DURATION_MS = 320;
+const shakingHoleIndex = ref(-1);
+let shakeTimeoutId = null;
+
+watch(
+  () => props.game.state.invalidAttempt,
+  (attempt) => {
+    if (!attempt || !interactive.value) return;
+    if (shakeTimeoutId !== null) clearTimeout(shakeTimeoutId);
+    shakingHoleIndex.value = attempt.pegIndex;
+    shakeTimeoutId = setTimeout(() => {
+      shakingHoleIndex.value = -1;
+      shakeTimeoutId = null;
+    }, SHAKE_DURATION_MS);
+  }
+);
 
 /** Whether hole `index` should currently show a peg -- overridden during a jump animation so the traveling peg (not the destination hole) reads as "carrying" it, and the jumped peg stays visible long enough to dissolve. */
 function shouldShowPeg(index) {
@@ -243,6 +259,26 @@ function handleHoleClick(index) {
   if (!interactive.value) return;
   props.game.selectHole(index);
 }
+
+// --- deselect on any non-hole tap: a peg left selected with nowhere else
+// to tap is a common "how do I get out of this" stuck feeling, so any tap
+// that isn't itself on a hole -- the board's own plate/padding, outside the
+// board entirely (header, controls, blank page), anywhere -- clears the
+// selection. A tap that IS on a hole is left alone here: handleHoleClick()
+// above already covers every one of those cases itself, including its own
+// deselect for a tap on an illegal target (see useGame.js's selectHole()),
+// so this only needs to catch the gap that's left: a tap that never landed
+// on a hole button at all.
+function handleNonHoleClick(event) {
+  if (!interactive.value) return;
+  if (props.game.state.selectedHole === null) return;
+  if (event.target.closest('.hole')) return;
+  props.game.deselect();
+}
+
+onMounted(() => {
+  document.addEventListener('click', handleNonHoleClick);
+});
 </script>
 
 <template>
@@ -263,6 +299,8 @@ function handleHoleClick(index) {
           target: isValidTarget(index),
           'target-repeat': isGhostRepeat(index),
           pulsing: index === pulsingIndex,
+          shaking: index === shakingHoleIndex,
+          blocked: isBlocked(index),
         }"
         :style="{ left: position.left, top: position.top, '--ripple-delay': rippleDelayMs(index) + 'ms' }"
         :aria-label="holeAriaLabel(index)"
@@ -508,6 +546,84 @@ function handleHoleClick(index) {
   box-shadow:
     inset 0 1px 2px rgba(0, 0, 0, 0.12),
     0 0 0 2px var(--color-accent);
+}
+
+/* An empty hole the selected peg can't reach right now -- gently darkened
+   (a translucent ink overlay layered onto the existing recess shadow, so it
+   stays correct under any theme rather than hardcoding a grey) so it's
+   obvious at a glance which open spaces are actually in play. Shares the
+   base `.hole` rule's `transition: box-shadow 0.15s ease`, so it fades in
+   and back out smoothly as the selection changes -- no extra rule needed. */
+.hole.blocked {
+  box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, 0.12),
+    inset 0 0 0 999px rgba(36, 27, 20, 0.14);
+}
+
+/* The "nope" cue for a tap that tried to jump a selected peg somewhere
+   illegal (see useGame.js's `state.invalidAttempt`) -- a quick wiggle plus
+   a brief red-tinted ring flash, using the same red as the Red peg color
+   (logic/pegColors.js) so it reads as "stop", never mistaken for the
+   accent-colored "this is a legal target" ring above. */
+.hole.shaking {
+  animation: hole-shake 0.32s ease-in-out;
+}
+
+@keyframes hole-shake {
+  0% {
+    transform: translate(-50%, -50%) translateX(0);
+    box-shadow:
+      inset 0 1px 2px rgba(0, 0, 0, 0.12),
+      0 0 0 0 rgba(193, 66, 47, 0);
+  }
+  20% {
+    transform: translate(-50%, -50%) translateX(-4px);
+    box-shadow:
+      inset 0 1px 2px rgba(0, 0, 0, 0.12),
+      0 0 0 3px rgba(193, 66, 47, 0.75);
+  }
+  40% {
+    transform: translate(-50%, -50%) translateX(4px);
+  }
+  60% {
+    transform: translate(-50%, -50%) translateX(-3px);
+  }
+  80% {
+    transform: translate(-50%, -50%) translateX(3px);
+    box-shadow:
+      inset 0 1px 2px rgba(0, 0, 0, 0.12),
+      0 0 0 2px rgba(193, 66, 47, 0.4);
+  }
+  100% {
+    transform: translate(-50%, -50%) translateX(0);
+    box-shadow:
+      inset 0 1px 2px rgba(0, 0, 0, 0.12),
+      0 0 0 0 rgba(193, 66, 47, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hole.shaking {
+    animation: hole-shake-reduced 0.32s ease-out;
+  }
+}
+
+@keyframes hole-shake-reduced {
+  0% {
+    box-shadow:
+      inset 0 1px 2px rgba(0, 0, 0, 0.12),
+      0 0 0 0 rgba(193, 66, 47, 0);
+  }
+  30% {
+    box-shadow:
+      inset 0 1px 2px rgba(0, 0, 0, 0.12),
+      0 0 0 3px rgba(193, 66, 47, 0.75);
+  }
+  100% {
+    box-shadow:
+      inset 0 1px 2px rgba(0, 0, 0, 0.12),
+      0 0 0 0 rgba(193, 66, 47, 0);
+  }
 }
 
 /* Ghost Outline (see logic/ghostMoves.js): a jump already taken from this
