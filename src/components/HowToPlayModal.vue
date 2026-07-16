@@ -287,7 +287,7 @@ onBeforeUnmount(() => {
       <div class="how-to-divider"></div>
 
       <section class="demo-block">
-        <h3 class="demo-heading">Hop dots of the same color to remove them</h3>
+        <h3 class="demo-heading">You can only hop dots of the same color</h3>
         <div class="mini-board" aria-hidden="true">
           <div class="mini-hole-plane">
             <div
@@ -335,7 +335,7 @@ onBeforeUnmount(() => {
       </section>
 
       <section class="demo-block">
-        <h3 class="demo-heading">No hops left ends the round</h3>
+        <h3 class="demo-heading">Round ends when there are no valid hops</h3>
         <div class="mini-board tall" aria-hidden="true">
           <div class="mini-hole-plane">
             <div v-for="(position, index) in demo3Holes" :key="index" class="hole" :style="{ left: position.x + '%', top: position.y + '%' }">
