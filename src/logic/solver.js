@@ -61,16 +61,19 @@ function countColorsAtOne(perColor) {
  * @param {{from:number, over:number, to:number}[]} moveList - every jump
  *   this board shape allows, from geometry.js
  * @param {number} cellCount - how many holes this board has
- * @param {{nodeBudget?: number, onStateExpanded?: (masks: bigint[], legalMoves: object[]) => void}} [options] -
+ * @param {{nodeBudget?: number, onStateExpanded?: (masks: bigint[], legalMoves: object[], key: bigint, parentKey: bigint|null) => void}} [options] -
  *   `nodeBudget` is an optional safety valve, used only by the offline
  *   pool-generator script (scripts/generate-puzzle-pool.js) to skip a
  *   handful of pathologically slow candidates on big, densely connected
  *   boards instead of running (near) forever. `onStateExpanded` is an
- *   optional instrumentation hook, used only by the offline difficulty
- *   analysis (scripts/analyze-puzzle-difficulty.js via puzzleDag.js) to
+ *   optional instrumentation hook, used by the offline difficulty analysis
+ *   (scripts/analyze-puzzle-difficulty.js via puzzleDag.js) and the dev-only
+ *   search-tree visualization (workers/searchTreeExplorerWorker.js) to
  *   observe every distinct position this solve visits without paying for a
  *   second traversal -- it fires once per distinct state, the first time
- *   `findBest` expands it (never on a cache hit). Leave both unset for
+ *   `findBest` expands it (never on a cache hit), with that state's own memo
+ *   key and the memo key of whichever call site first reached it (null at
+ *   the root) -- a real edge in the actual search. Leave both unset for
  *   normal gameplay -- there is no limit and no instrumentation by default.
  * @returns {{ findBest: (masks: bigint[]) => {minPegs: number, perColor: number[], move: object|null}, getNodesVisited: () => number }}
  */
@@ -101,9 +104,15 @@ export function createSolver(moveList, cellCount, options = {}) {
    * head down that path.
    *
    * @param {bigint[]} masks - current board position, one mask per color
+   * @param {bigint|null} [parentKey] - INTERNAL: the memo key of whichever
+   *   state's recursive call led here, or null at the root. Every external
+   *   caller calls findBest(masks) with just one argument (parentKey
+   *   defaults to null) -- this is only ever threaded by findBest calling
+   *   itself, purely so onStateExpanded (below) can report a real
+   *   parent-child edge, not just an isolated state.
    * @returns {{minPegs: number, perColor: number[], move: {from:number, over:number, to:number}|null}}
    */
-  function findBest(masks) {
+  function findBest(masks, parentKey = null) {
     const key = encodeKey(masks);
     const cached = memo.get(key);
     if (cached !== undefined) {
@@ -118,7 +127,10 @@ export function createSolver(moveList, cellCount, options = {}) {
     // Instrumentation only -- computed fresh (not from the scoring loop
     // below, which may stop early once it proves the theoretical floor) so
     // callers always see the COMPLETE legal-move list for this state, not
-    // just whatever the early-exit scoring loop happened to look at.
+    // just whatever the early-exit scoring loop happened to look at. `key`
+    // and `parentKey` are this state's own memo key and the memo key of the
+    // ONE real call site that first reached it -- a genuine edge in the
+    // actual search, not a fabricated one (see workers/searchTreeExplorerWorker.js).
     if (onStateExpanded) {
       const occupiedForCheck = masks.reduce((acc, mask) => acc | mask, 0n);
       const legalMoves = moveList.filter((move) => {
@@ -127,7 +139,7 @@ export function createSolver(moveList, cellCount, options = {}) {
         if (colorAt(masks, move.over) !== fromColor) return false;
         return !(occupiedForCheck & (1n << BigInt(move.to)));
       });
-      onStateExpanded(masks, legalMoves);
+      onStateExpanded(masks, legalMoves, key, parentKey);
     }
 
     const colorCount = masks.length;
@@ -155,7 +167,7 @@ export function createSolver(moveList, cellCount, options = {}) {
       const nextMasks = [...masks];
       nextMasks[fromColor] = (masks[fromColor] & ~fromBit & ~overBit) | toBit;
 
-      const result = findBest(nextMasks);
+      const result = findBest(nextMasks, key);
 
       // Prefer a strictly lower total, and among ties for the lowest total
       // prefer whichever line leaves more colors down at exactly 1 peg --

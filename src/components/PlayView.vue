@@ -53,6 +53,9 @@ import ResultStatRow from './ResultStatRow.vue';
 import ResultFooter from './ResultFooter.vue';
 import ArchiveDayStrip from './ArchiveDayStrip.vue';
 import TemporaryWatchSolveButton from './TemporaryWatchSolveButton.vue';
+import SearchTreeVisualizer from './SearchTreeVisualizer.vue';
+import PuzzleDifficultyProfile from './PuzzleDifficultyProfile.vue';
+import BreadthDepthThumbnails from './BreadthDepthThumbnails.vue';
 
 const isDevBuild = import.meta.env.DEV;
 
@@ -389,6 +392,12 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
+      <div v-if="isDevBuild" class="dev-search-tools">
+        <SearchTreeVisualizer :geometry="game.geometry" :masks="game.state.masks" :par="game.par" />
+        <PuzzleDifficultyProfile :geometry="game.geometry" :masks="game.state.masks" :par="game.par" />
+        <BreadthDepthThumbnails :game="game" />
+      </div>
+
       <TemporaryWatchSolveButton v-if="isDevBuild" :game="game" />
     </div>
 
@@ -449,6 +458,15 @@ onBeforeUnmount(() => {
   font-size: 0.72rem;
   letter-spacing: 0.03em;
   color: var(--color-ink-dim);
+}
+
+.dev-search-tools {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  margin-top: 4px;
 }
 
 .tagline {
