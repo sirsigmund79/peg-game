@@ -2,6 +2,34 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <script>
+      // A browser that cached an older index.html (e.g. under pre-fix,
+      // header-less caching rules) will still request that build's hashed
+      // /assets/* files, which no longer exist once a new build has been
+      // deployed. Catch that 404 and reload once so we re-fetch a fresh
+      // index.html (now correctly revalidated per public/_headers) instead
+      // of leaving visitors stuck on a broken, unstyled page.
+      (function () {
+        try {
+          if (sessionStorage.getItem('dh-stale-reload')) return;
+          window.addEventListener(
+            'error',
+            function (event) {
+              var target = event.target;
+              var url = target && (target.src || target.href);
+              if (url && /\/assets\//.test(url)) {
+                sessionStorage.setItem('dh-stale-reload', '1');
+                location.reload();
+              }
+            },
+            true,
+          );
+        } catch (e) {
+          // sessionStorage unavailable (e.g. private mode edge cases) --
+          // skip the self-heal rather than risk a reload loop.
+        }
+      })();
+    </script>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
