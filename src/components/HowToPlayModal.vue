@@ -5,7 +5,7 @@
   The whole "how do I play this" story in one glance -- deliberately not a
   paginated, multi-step carousel: Dot Hopper only has a couple of things a
   player can't already guess (a peg can only jump its own color; the round
-  ends the instant no jump is left), so a single card with three small
+  ends the instant no jump is left), so a single card with two small
   real-styled demos teaches it faster than clicking through several screens
   would. Opens itself once, automatically, the very first time a browser
   ever loads the game; after that, reached only via the header's "?" button
@@ -14,18 +14,18 @@
 
   Each demo is a genuinely tiny, DECORATIVE version of the real board (not
   an abstract stand-in): same hole/peg shapes, same peg colors, same
-  selected/target/blocked ring treatment as Board.vue, and -- critically --
-  the exact same jump-arc tween (fx/jumpAnimation.js, shared with Board.vue
+  selected/target ring treatment as Board.vue, and -- critically -- the
+  exact same jump-arc tween (fx/jumpAnimation.js, shared with Board.vue
   itself) and the exact same dissolve CSS values, so a tutorial jump looks
-  and times out identically to a real one. Demos 1 and 2 play themselves on
-  a loop via a small async script (select -> hold -> jump/block -> hold ->
-  reset) rather than hand-authored CSS @keyframes, because the real board's
-  own animation is JS-driven (an arc tween, not a fixed keyframe curve) --
-  matching that requires the same kind of driver, not a CSS approximation
-  of it. Demo 3 is deliberately NOT animated at all -- no jump, no
-  selection, nothing moving -- it's a single still frame of a finished
-  board, since its whole job is showing what "no hop left" LOOKS like, not
-  re-teaching the jump mechanic a third time.
+  and times out identically to a real one. Demo 1 plays itself on a loop via
+  a small async script (select -> hold -> jump -> hold -> reset) rather
+  than hand-authored CSS @keyframes, because the real board's own animation
+  is JS-driven (an arc tween, not a fixed keyframe curve) -- matching that
+  requires the same kind of driver, not a CSS approximation of it. Demo 2 is
+  deliberately NOT animated at all -- no jump, no selection, nothing moving
+  -- it's a single still frame of a finished board, since its whole job is
+  showing what "no hop left" LOOKS like, not re-teaching the jump mechanic a
+  second time.
   ============================================================================
 -->
 <script setup>
@@ -135,7 +135,6 @@ function makeDemoState(initialPegs) {
     pegs: [...initialPegs], // colorIndex, or null for an empty hole -- one entry per hole position below
     selectedIndex: -1,
     targetIndices: [],
-    blockedIndices: [],
     dissolvingIndex: -1, // hole whose peg data is already gone but still rendering, fading out -- see jump() above
     dissolvingColorIndex: null, // that hole's color, captured before its data was cleared
     arrivingIndex: -1, // hole whose peg data has already landed but stays hidden until the travel-slot peg visually arrives
@@ -186,34 +185,8 @@ async function demo1Script({ sleep, jump }) {
   await sleep(950);
 }
 
-// --- Demo 2: a blocked jump. Blue selects, but its only empty neighbor is
-// past a PURPLE peg -- so that open spot greys out instead of glowing,
-// exactly like Board.vue's new `.hole.blocked` treatment for a selected
-// peg's out-of-reach open spaces. ---
-
-const demo2Holes = [
-  { x: 18, y: 50 },
-  { x: 50, y: 50 },
-  { x: 82, y: 50 },
-];
-const demo2 = makeDemoState([BLUE, PURPLE, null]);
-const demo2Runner = createDemoRunner();
-
-async function demo2Script({ sleep }) {
-  demo2.pegs = [BLUE, PURPLE, null];
-  demo2.selectedIndex = -1;
-  demo2.blockedIndices = [];
-  await sleep(650);
-  demo2.selectedIndex = 0;
-  await sleep(300); // a beat between "selected" and the open spot greying in -- two distinct events, not one
-  demo2.blockedIndices = [2];
-  await sleep(1150);
-  demo2.selectedIndex = -1;
-  demo2.blockedIndices = [];
-  await sleep(550);
-}
-
-// --- Demo 3: the round ending, shown as one plain still frame -- no
+// --- Demo 2 (variable names below keep the historical `demo3` prefix):
+// the round ending, shown as one plain still frame -- no
 // selection, no jump, nothing moving. A bigger, three-color board sitting
 // in a genuinely stuck position: re-checking every row/column by hand
 // confirms no same-color pair anywhere has an empty landing spot two away,
@@ -239,11 +212,10 @@ function pegHex(colorIndex) {
 }
 
 /** A demo's reduced-motion fallback: skip the loop entirely and freeze on the single most explanatory static frame (same "selected, and here's what that means" moment each script pauses on mid-loop). */
-function freeze(state, { pegs, selectedIndex = -1, targetIndices = [], blockedIndices = [] }) {
+function freeze(state, { pegs, selectedIndex = -1, targetIndices = [] }) {
   state.pegs = [...pegs];
   state.selectedIndex = selectedIndex;
   state.targetIndices = targetIndices;
-  state.blockedIndices = blockedIndices;
 }
 
 onMounted(() => {
@@ -252,19 +224,16 @@ onMounted(() => {
 
   if (prefersReducedMotion) {
     freeze(demo1, { pegs: [BLUE, BLUE, null, PURPLE], selectedIndex: 0, targetIndices: [2] });
-    freeze(demo2, { pegs: [BLUE, PURPLE, null], selectedIndex: 0, blockedIndices: [2] });
     // demo3 is already a static frame -- nothing to freeze.
     return;
   }
 
   demo1Runner.run(demo1Script);
-  demo2Runner.run(demo2Script);
 });
 
 onBeforeUnmount(() => {
   document.removeEventListener('keydown', handleKeydown);
   demo1Runner.stop();
-  demo2Runner.stop();
 });
 </script>
 
@@ -309,26 +278,6 @@ onBeforeUnmount(() => {
             </div>
             <div v-if="demo1.travel" class="travel-slot" :style="{ left: demo1.travel.leftPercent + '%', top: demo1.travel.topPercent + '%' }">
               <span class="peg" :style="{ transform: `scale(${demo1.travel.scale})`, backgroundColor: pegHex(demo1.travel.colorIndex) }"></span>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section class="demo-block">
-        <h3 class="demo-heading">Different colors block the hop</h3>
-        <div class="mini-board short" aria-hidden="true">
-          <div class="mini-hole-plane">
-            <div
-              v-for="(position, index) in demo2Holes"
-              :key="index"
-              class="hole"
-              :class="{
-                selected: demo2.selectedIndex === index,
-                blocked: demo2.blockedIndices.includes(index),
-              }"
-              :style="{ left: position.x + '%', top: position.y + '%' }"
-            >
-              <span v-if="demo2.pegs[index] !== null" class="peg" :style="{ backgroundColor: pegHex(demo2.pegs[index]) }"></span>
             </div>
           </div>
         </div>
@@ -529,7 +478,7 @@ onBeforeUnmount(() => {
 /* --- Mini demo boards. Structurally the same idea as Board.vue's own
    .board/.hole-plane/.hole/.peg -- an absolutely-positioned plane so a
    travel-slot peg can arc between two holes' exact coordinates -- and the
-   selected/target/blocked/dissolving values below are hand-kept identical
+   selected/target/dissolving values below are hand-kept identical
    to Board.vue's (Vue's scoped styles can't be shared directly
    across components), so a tutorial jump looks pixel-for-pixel like a real
    one. If Board.vue's own ring/scale/timing values ever change, match them
@@ -549,10 +498,6 @@ onBeforeUnmount(() => {
   padding: 0 clamp(12px, 4vw, 18px);
   background: var(--color-board-plate);
   border-radius: 14px;
-}
-
-.mini-board.short {
-  --hole-size: clamp(28px, 8vw, 42px);
 }
 
 .mini-board.tall {
@@ -592,12 +537,6 @@ onBeforeUnmount(() => {
   box-shadow:
     inset 0 1px 2px rgba(0, 0, 0, 0.12),
     0 0 0 2px var(--color-accent);
-}
-
-.hole.blocked {
-  box-shadow:
-    inset 0 1px 2px rgba(0, 0, 0, 0.12),
-    inset 0 0 0 999px rgba(36, 27, 20, 0.14);
 }
 
 .peg {
