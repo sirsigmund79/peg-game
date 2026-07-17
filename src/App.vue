@@ -13,7 +13,7 @@
   ============================================================================
 -->
 <script setup>
-import { computed, watch } from 'vue';
+import { computed, onMounted, watch } from 'vue';
 import { useTheme } from './composables/useTheme.js';
 import { useRouter } from './composables/useRouter.js';
 import { useHowToPlay } from './composables/useHowToPlay.js';
@@ -26,9 +26,11 @@ import HowToPlayModal from './components/HowToPlayModal.vue';
 
 useTheme(); // applies the Moose theme's CSS variables to the page -- see composables/useTheme.js
 
-// Never auto-opened -- a player only sees this if they tap the header "?"
-// button themselves (see below).
+// Opens itself once, the very first time this browser ever loads the game
+// (see useHowToPlay.js's openIfFirstVisit()) -- after that, same as before,
+// a player only sees it again if they tap the header "?" button themselves.
 const howToPlay = useHowToPlay();
+onMounted(() => howToPlay.openIfFirstVisit());
 
 // Vite sets import.meta.env.DEV to true for `npm run dev` and false for a
 // production `npm run build` -- reading it into a plain variable here
@@ -85,8 +87,21 @@ watch(
   { immediate: true }
 );
 
-function handleStatsNavClick() {
+// Clicking the nav icon for the page you're already on toggles back home,
+// rather than just re-navigating to the same page.
+function handleStatsNavClick(event) {
   track(EVENTS.STATS_NAV_CLICKED, {});
+  if (page.value === 'stats') {
+    event.preventDefault();
+    navigate('/');
+  }
+}
+
+function handleArchiveNavClick(event) {
+  if (page.value === 'archive') {
+    event.preventDefault();
+    navigate('/');
+  }
 }
 </script>
 
@@ -111,7 +126,7 @@ function handleStatsNavClick() {
               <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" />
             </svg>
           </a>
-          <a href="#/archive" class="icon-link" :class="{ active: page === 'archive' }" aria-label="Archive" title="Archive">
+          <a href="#/archive" class="icon-link" :class="{ active: page === 'archive' }" aria-label="Archive" title="Archive" @click="handleArchiveNavClick">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <rect x="3" y="4" width="18" height="18" rx="2" />
               <line x1="16" y1="2" x2="16" y2="6" />

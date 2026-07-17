@@ -52,7 +52,7 @@ async function handleShareClick() {
 <template>
   <footer class="result-footer">
     <div class="result-actions">
-      <button type="button" class="share-button" @click="handleShareClick">Challenge A Friend 💬</button>
+      <button type="button" class="share-button" @click="handleShareClick">Share With A Friend 💬</button>
       <button type="button" class="reset-button" @click="$emit('reset')">Reset</button>
     </div>
     <p v-if="shareStatusMessage" class="share-status" role="status">{{ shareStatusMessage }}</p>

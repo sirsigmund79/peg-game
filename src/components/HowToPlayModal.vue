@@ -7,10 +7,10 @@
   player can't already guess (a peg can only jump its own color; the round
   ends the instant no jump is left), so a single card with three small
   real-styled demos teaches it faster than clicking through several screens
-  would. Never shown automatically -- reached only via the header's "?"
-  button (see composables/useHowToPlay.js, driven from App.vue). A
-  first-time player is left to figure the game out on their own, or to go
-  looking for help themselves.
+  would. Opens itself once, automatically, the very first time a browser
+  ever loads the game; after that, reached only via the header's "?" button
+  (see composables/useHowToPlay.js's openIfFirstVisit(), driven from
+  App.vue).
 
   Each demo is a genuinely tiny, DECORATIVE version of the real board (not
   an abstract stand-in): same hole/peg shapes, same peg colors, same
@@ -280,7 +280,7 @@ onBeforeUnmount(() => {
       <h2 id="how-to-title" class="how-to-title">How to Play</h2>
 
       <ul class="how-to-intro">
-        <li>Clear as many dots as you can.</li>
+        <li><b>Clear dots to increase your ranking.</b></li>
         <li>Tap a dot, then tap an open spot to hop it.</li>
         <li>Run out of hops, and the round ends.</li>
       </ul>
@@ -360,7 +360,11 @@ onBeforeUnmount(() => {
   justify-content: center;
   padding: clamp(6px, 3.5vmin, 20px);
   background: rgba(36, 27, 20, 0.55);
-  animation: how-to-backdrop-in 0.2s ease-out;
+  /* Plain `ease` rather than `ease-out` -- ease-out front-loads most of the
+     opacity change into the animation's first third, which on a full-screen
+     darkening reads as an abrupt flash-then-hold rather than a fade. A more
+     even ramp is what actually registers as "fading in" to the eye. */
+  animation: how-to-backdrop-in 0.28s ease;
 }
 
 /* Sized for comfortable reading first -- fixed, generous padding/type
@@ -381,7 +385,13 @@ onBeforeUnmount(() => {
   border-radius: var(--frame-radius-board);
   box-shadow: var(--frame-shadow-card);
   text-align: left;
-  animation: how-to-card-in 0.25s ease-out;
+  /* Starts ~40ms after the backdrop (via `backwards` holding it at the
+     `from` keyframe during that delay) so the dim-in and the card's
+     rise-and-settle read as two distinct beats instead of one flat pop --
+     and a decelerate curve (quick start, gentle settle) rather than
+     `ease-out`'s more linear-feeling glide, since that settle is what
+     actually makes an entrance read as intentional rather than sudden. */
+  animation: how-to-card-in 0.32s cubic-bezier(0.16, 1, 0.3, 1) 0.04s backwards;
 }
 
 @keyframes how-to-backdrop-in {
@@ -396,7 +406,7 @@ onBeforeUnmount(() => {
 @keyframes how-to-card-in {
   from {
     opacity: 0;
-    transform: translateY(10px) scale(0.97);
+    transform: translateY(16px) scale(0.95);
   }
   to {
     opacity: 1;

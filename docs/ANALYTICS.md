@@ -71,7 +71,7 @@ dev-vs-production split `app_env` already covers.
 | `stats_archive_cta_clicked` | "Check out the Archive" tapped on the stats page (`StatsView.vue`) | — |
 | `badge_unlocked` | A badge's unlock condition (see `logic/badges.js`) is newly satisfied | `badge_id`, `puzzle_number` |
 | `ghost_outline_baseline_captured` | Once per browser, on the first app boot after this instrumentation ships (`initAnalytics()`) | `baseline_genius_rate`, `baseline_lifetime_puzzles_completed`, `baseline_current_streak_days` |
-| `how_to_play_shown` | The How to Play modal opens, via the header's "?" button — never shown automatically (`useHowToPlay.js`) | — |
+| `how_to_play_shown` | The How to Play modal opens — automatically on a browser's first-ever visit, or via the header's "?" button after that (`useHowToPlay.js`) | `source` (`auto`\|`manual`) |
 | `how_to_play_dismissed` | The How to Play modal closes | `source` (`manual`\|`backdrop`\|`escape`) |
 | `$exception` | Any uncaught error/rejection | message, stack, `app_env` |
 
@@ -307,14 +307,15 @@ significance calculation actually clear before deciding.
    *Secondary:* downstream `ref=share` visit volume (Dashboard 4). No new
    instrumentation needed — both metrics already exist.
 
-2. **First-time onboarding** — a one-time tutorial overlay for brand-new
-   players (nothing like this exists today). *Hypothesis:* a quick
-   explainer reduces early bounce and improves habit formation.
+2. **First-time onboarding** — the How to Play modal now auto-opens on a
+   brand-new player's first-ever visit (`useHowToPlay.js`'s
+   `openIfFirstVisit()`), shipped directly rather than as a flagged
+   experiment, so there's no control group left to compare against.
+   *Hypothesis, if revisited later:* tweaking that modal's content/timing
+   (rather than whether it exists at all) moves D1 retention further.
    *Primary metric:* D1 retention. *Secondary:* `puzzle_completed` rate on
-   a player's very first puzzle. *Requires:* building the onboarding UI,
-   plus a way to detect "first session" (derivable from `getHistory()`
-   being empty at session start — no new event needed, just a property on
-   the flag targeting).
+   a player's very first puzzle. *Requires:* a variant of the modal to test
+   against the current one, gated behind a flag.
 
 3. **Result-reveal pacing** — vary `RESULT_HOLD_MS` in `PlayView.vue` and
    the peg-pulse timing in `useResultReveal.js`. *Hypothesis:* a snappier
