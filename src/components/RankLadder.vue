@@ -5,14 +5,26 @@
   The result screen's rank ladder: every tier from logic/rules.js's
   RANK_TIERS (never hardcoded), best at the top. Self-plays its own one-shot
   entrance the same way ResultHeader.vue self-plays on `revealed` turning
-  true: every rung stamps in first (unearned, except a tier ABOVE this
-  round's result that was already earned on an earlier, better attempt --
-  see `previousBest` below), then a highlight climbs from the very bottom
-  ("Warming Up") up to the rank achieved THIS round, one rung at a time,
-  every single time regardless of history -- so a repeat of an
-  already-ranked puzzle gets the same "spotlight climbing the ladder"
-  moment as a first-ever finish, rather than jumping straight to whichever
-  rung was earned.
+  true: every rung stamps in unearned first, then a highlight climbs from
+  the very bottom ("Warming Up") up to the rank achieved THIS round, one
+  rung at a time. Purely per-playthrough -- a tier earned on an earlier,
+  better attempt this same puzzle (see composables/useGame.js's
+  `previousBest`) gets ZERO special treatment here if this round didn't
+  reach it too; Reset-ing and coming back with a worse result shows that
+  better tier as plain unearned, not a leftover "already earned" look. Every
+  finish, first-ever or a hundredth repeat, plays the exact same "spotlight
+  climbing the ladder" moment from scratch.
+
+  The climb itself is deliberately quiet: every rung it passes through on
+  the way up just settles straight to the plain 'earned' look (checkmark
+  fades in, border/background ease over) -- none of them get the loud
+  scale-bounce "you are here" treatment, since with a tall ladder that would
+  mean several rungs going off at once and the whole thing reading as one
+  blur of motion instead of a sequence. That loud treatment (the `current`
+  state's `rung-land` animation, see the CSS below) is reserved for the one
+  rung actually achieved this round, and only plays once the climb has
+  finished settling every rung below it -- so the "you've arrived" beat
+  reads as its own distinct moment, not lost in the climb.
 
   Genius, the top tier, gets its own gold treatment (see the `.genius` CSS
   below) layered on top of the normal earned/current/unearned looks --
@@ -29,14 +41,6 @@ import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue';
 import { RANK_TIERS, getDotsToRank, getRankTierIndex } from '../logic/rules.js';
 
 const props = defineProps({
-  // The best-ever result recorded for this puzzle BEFORE this round (see
-  // composables/useGame.js's `previousBest`) -- undefined if this is the
-  // puzzle's first-ever completion. No longer decides where the animated
-  // climb below STARTS (that's always the very bottom, every time) -- only
-  // seeds a tier ABOVE this round's result as already-earned, on a worse
-  // repeat of an already-better-earned puzzle. See `newBest` for whether
-  // THIS round beat it.
-  previousBest: { type: Object, default: undefined },
   // The just-finished round's overPar (see composables/useGame.js).
   overPar: { type: Number, required: true },
   // Whether THIS finish just raised previousBest -- see useGame.js's
@@ -65,6 +69,9 @@ const CLIMB_STEP_MS = 400;
 // Extra breathing room between the last rung stamping in and the climb's
 // first step, so the two beats read as distinct rather than one blur.
 const CLIMB_START_PAUSE_MS = 250;
+// Same idea, between the climb's last quiet step and the achieved rung's
+// own loud flourish -- see the file header comment.
+const ACHIEVED_PAUSE_MS = 250;
 
 // One entry per RANK_TIERS slot (same order: worst..best).
 const rungs = reactive(RANK_TIERS.map(() => ({ status: 'unearned', appeared: false })));
@@ -82,12 +89,10 @@ function clearPendingTimeouts() {
 /** Renders the fully-settled end state instantly, no animation -- used for reduced motion and for a restored/already-finished round. */
 function settleInstantly() {
   clearPendingTimeouts();
-  const baselineIndex = props.previousBest ? getRankTierIndex(props.previousBest.overPar) : -1;
   const targetIndex = getRankTierIndex(props.overPar);
-  const earnedThrough = Math.max(baselineIndex, targetIndex);
   rungs.forEach((rung, index) => {
     rung.appeared = true;
-    rung.status = index === targetIndex ? 'current' : index <= earnedThrough ? 'earned' : 'unearned';
+    rung.status = index === targetIndex ? 'current' : index < targetIndex ? 'earned' : 'unearned';
   });
   newBestAchieved.value = false; // no "just happened" moment to celebrate on an instant settle
 }
@@ -95,7 +100,6 @@ function settleInstantly() {
 /** The one-shot stamp-in-then-climb sequence -- see the file header above. */
 function playEntrance() {
   clearPendingTimeouts();
-  const baselineIndex = props.previousBest ? getRankTierIndex(props.previousBest.overPar) : -1;
   const targetIndex = getRankTierIndex(props.overPar);
   // No pill on Genius -- see the file header comment for why.
   newBestAchieved.value = props.newBest && targetIndex !== RANK_TIERS.length - 1;
@@ -105,15 +109,11 @@ function playEntrance() {
     return;
   }
 
-  rungs.forEach((rung, index) => {
+  // Every tier starts unearned, no exceptions -- see the file header
+  // comment on why a better previousBest tier gets no head start here.
+  rungs.forEach((rung) => {
     rung.appeared = false;
-    // Every tier AT or BELOW this round's result always starts unearned --
-    // the climb below animates through all of them, every time, regardless
-    // of previousBest. Only a tier ABOVE this round's result -- only
-    // possible on a worse repeat of an already-better-earned puzzle --
-    // keeps its earned-from-history status, since the climb never reaches
-    // it this round (mirrors settleInstantly()'s equivalent rule below).
-    rung.status = index > targetIndex && index <= baselineIndex ? 'earned' : 'unearned';
+    rung.status = 'unearned';
   });
 
   RANK_TIERS.forEach((_, index) => {
@@ -126,18 +126,25 @@ function playEntrance() {
   // Always climbs the FULL ladder from Warming Up up to this round's result
   // -- never shortcut by previousBest -- so even a repeat of an
   // already-ranked puzzle gets the same "spotlight climbing one rung at a
-  // time" moment as a first-ever finish. Each step lights the new rung up
-  // as 'current' (the loud achieved/darker-green-or-gold look) and, in the
-  // same tick, settles the rung the spotlight just left into 'earned'
-  // (checkmark stays, look lightens) -- the achieved rung itself is simply
-  // never demoted, since nothing steps past it.
-  for (let index = 0; index <= targetIndex; index++) {
+  // time" moment as a first-ever finish. Every rung BELOW the achieved one
+  // just settles straight to 'earned' as the spotlight passes through --
+  // quiet on purpose, see the file header comment.
+  for (let index = 0; index < targetIndex; index++) {
     const stepDelay = stampSettleMs + index * CLIMB_STEP_MS;
     after(stepDelay, () => {
-      rungs[index].status = 'current';
-      if (index > 0) rungs[index - 1].status = 'earned';
+      rungs[index].status = 'earned';
     });
   }
+
+  // The achieved rung itself gets the loud 'current' treatment -- but only
+  // once the climb through everything below it has actually finished
+  // settling (an extra pause first, same reasoning as CLIMB_START_PAUSE_MS
+  // above), so it reads as its own distinct arrival rather than one more
+  // step in the climb.
+  const achievedDelay = stampSettleMs + targetIndex * CLIMB_STEP_MS + (targetIndex > 0 ? ACHIEVED_PAUSE_MS : 0);
+  after(achievedDelay, () => {
+    rungs[targetIndex].status = 'current';
+  });
 }
 
 watch(
@@ -201,10 +208,18 @@ function dotsToGo(tier) {
   gap: 10px;
   padding: 9px 12px;
   border-radius: 12px;
-  border: 2px solid var(--color-card-border);
+  /* Plain grey, not the app's usual dark card border -- reserved for
+     unearned rungs, so an earned/current rung's dark border (see below)
+     reads as a distinct, "achieved" look rather than the default look
+     every card already has. */
+  border: 2px solid rgba(36, 27, 20, 0.2);
   background: var(--color-card-bg);
   opacity: 0;
   transform: scale(0.85);
+  /* Covers the quiet unearned -> earned settle during the climb (see
+     script above) -- border/background ease into place instead of
+     snapping, the "styling changing" half of that step's subtle beat. */
+  transition: border-color 0.25s ease-out, background-color 0.25s ease-out;
 }
 
 .rung.appeared {
@@ -239,6 +254,7 @@ function dotsToGo(tier) {
   .rung {
     opacity: 1;
     transform: none;
+    transition: none;
   }
 
   .rung.appeared {
@@ -246,6 +262,10 @@ function dotsToGo(tier) {
   }
 
   .rung.current {
+    animation: none;
+  }
+
+  .rung-icon span {
     animation: none;
   }
 }
@@ -262,6 +282,26 @@ function dotsToGo(tier) {
   font-weight: 800;
   background: rgba(36, 27, 20, 0.08);
   color: var(--color-ink-dim);
+  transition: background-color 0.25s ease-out, color 0.25s ease-out;
+}
+
+/* The checkmark (or Genius's brain emoji) mounts fresh into the DOM the
+   moment a rung first becomes earned/current/aspirational-genius -- this is
+   the "subtle checkmark animation" half of the climb's quiet per-rung beat,
+   deliberately much smaller than rung-land below. */
+.rung-icon span {
+  animation: check-pop 0.22s ease-out;
+}
+
+@keyframes check-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 .rung-name {
@@ -269,6 +309,7 @@ function dotsToGo(tier) {
   font-weight: 800;
   font-size: 0.82rem;
   color: var(--color-ink-dim);
+  transition: color 0.25s ease-out;
 }
 
 .rung-meta {
@@ -285,9 +326,13 @@ function dotsToGo(tier) {
 
 /* Earned on a previous playthrough (or passed during this round's climb) --
    a settled, lighter accent look; never the loud "you are here" treatment
-   reserved for .current below. */
+   reserved for .current below. Border goes dark (the app's usual card-border
+   ink, same value .current uses) precisely because it's achieved -- that
+   dark border is reserved for earned/current rungs, never an unearned one
+   (including the very next, not-yet-earned rung right above it), which
+   stays plain grey (see the base .rung rule above). */
 .rung.earned {
-  border-color: rgba(28, 140, 82, 0.35);
+  border-color: var(--color-ink);
 }
 
 .rung.earned .rung-icon {

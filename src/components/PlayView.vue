@@ -26,9 +26,11 @@
   collapses out of the layout via its own `cleared` prop, and
   components/RankLadder.vue takes the space it leaves behind. The result
   screen always shows the most recent attempt -- there's no toggle to view
-  an older best; see useGame.js's `previousBest`/`justAchievedNewBest` for
-  the ladder's "has this rank ever been earned on this puzzle before" state
-  and its "New best!" pill.
+  an older best, and the ladder itself is purely per-playthrough (a better
+  tier earned on an earlier attempt this same puzzle gets no special
+  treatment if this round didn't reach it too); see useGame.js's
+  `justAchievedNewBest` for the one place history still matters here, the
+  "New best!" pill.
 
   The only dev-only thing left on this page is the small "Watch Solve"
   button: unlike the puzzle-archive picker, sound tuner, and level editor
@@ -328,7 +330,6 @@ onBeforeUnmount(() => {
                  vertical space the board leaves behind. -->
             <RankLadder
               v-if="showResult && reveal.ladderReady"
-              :previous-best="game.previousBest"
               :new-best="game.justAchievedNewBest"
               :over-par="game.overPar"
               :revealed="reveal.ladderReady"

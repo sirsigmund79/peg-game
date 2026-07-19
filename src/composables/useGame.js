@@ -110,11 +110,11 @@ export function useGame(puzzle, options = {}) {
     // The best-ever result recorded for this puzzle before the attempt
     // whose result is CURRENTLY showing -- frozen for that attempt's whole
     // result screen (see reset() below, which refreshes it from
-    // `sessionBest` at the start of the NEXT attempt). components/
-    // RankLadder.vue reads this as the baseline its one-shot climb
-    // animates FROM, so it must stay put through that animation even
-    // though `sessionBest` itself may ratchet past it moments after this
-    // attempt finishes.
+    // `sessionBest` at the start of the NEXT attempt). Purely the "did THIS
+    // attempt just beat it" comparison below for `justAchievedNewBest` --
+    // components/RankLadder.vue itself never reads this; its climb is
+    // strictly per-playthrough, so a better previousBest tier this attempt
+    // didn't reach gets no special treatment there.
     previousBest: priorBest,
     // The live, ratcheting best rank earned on this puzzle so far --
     // across every attempt this session, not just whichever one is

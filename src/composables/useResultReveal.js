@@ -34,10 +34,12 @@ const BOARD_SHRINK_WAIT_MS = 400;
 const TALLY_ENTER_WAIT_MS = 280;
 const FLY_STAGGER_MS = 45;
 // A straight, grounded drop (arcHeight: 0) rather than the jump's hop --
-// same rAF tween helper and duration as a real peg jump, just without the
-// arc, so it reads as "the same kind of motion, dropped flat" rather than a
-// whole new animation style.
-const FLY_DURATION_MS = JUMP_DURATION_MS;
+// same rAF tween helper as a real peg jump, just without the arc, so it
+// reads as "the same kind of motion, dropped flat" rather than a whole new
+// animation style. Deliberately a bit slower than JUMP_DURATION_MS itself
+// (a real in-game jump) -- this is a whole tally's worth of pegs landing in
+// sequence, not a single move, so each one gets more room to read.
+const FLY_DURATION_MS = JUMP_DURATION_MS * 1.3;
 // Once every peg has landed, components/Board.vue's `.board.cleared`
 // transition (0.22s height/padding/border, 0.18s opacity -- see that
 // file) needs a moment to visually clear before the ladder takes its place.
