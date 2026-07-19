@@ -5,9 +5,8 @@
   The "more obvious archive callout" shown on the result screen, once the
   just-finished round's own reveal animation has finished (see
   composables/useResultReveal.js and PlayView.vue's `showArchiveStrip`, set
-  once that reveal's promise resolves -- or immediately, if the player
-  touches the This game/Best toggle before it finishes on its own). A
-  horizontal strip of the last few archive days -- always anchored on
+  once that reveal's promise resolves). A horizontal strip of the last few
+  archive days -- always anchored on
   TODAY's puzzle number, not whichever puzzle was just played, so this reads
   as "the archive's most recent days" rather than shifting around when
   replaying an old day -- each shown as a tile with its own peg-dot glyph
@@ -24,21 +23,14 @@
   no scrolling at all, since a desktop player has no swipe gesture to
   discover the extra tiles with.
 
-  The result screen's own scroll (see useResultReveal.js's
-  waitForScrollSettle) only brings that screen into view -- it fires before
-  this strip even mounts, so on a short screen the strip can still land
-  below the fold. Once mounted, this scrolls itself the rest of the way
-  down, capped by the `keepVisibleEl` prop (the date-plus-result-card
-  anchor, passed from components/PlayView.vue as `resultGroupRef`) so the
-  scroll never pushes that anchor's own top -- the puzzle's date -- above
-  the viewport. On a screen too short to fit both the whole result card and
-  this whole strip, the date (and the card below it) wins; the strip may
-  still end up partly below the fold, same as before this clamp existed,
-  rather than trading one cut-off element for another.
+  The result screen is condensed enough (rank, tally, ladder, toggle/footer)
+  to fit above the fold without any scrolling -- this strip no longer
+  brings itself into view on mount; it just appears in normal document flow
+  like everything else on the result screen.
   ============================================================================
 -->
 <script setup>
-import { computed, onMounted, ref } from 'vue';
+import { computed } from 'vue';
 import { getTodayPuzzleNumber, getPuzzleForNumber } from '../logic/daily.js';
 import { getHistory } from '../logic/history.js';
 import { getRankForOverPar } from '../logic/rules.js';
@@ -48,49 +40,9 @@ import PuzzleGlyph from './PuzzleGlyph.vue';
 
 const RECENT_DAY_COUNT = 3;
 
-const props = defineProps({
-  // The date-plus-result-card anchor (see PlayView.vue's `resultGroupRef`)
-  // -- its top edge (the puzzle's date) is never scrolled above the
-  // viewport's top by the reveal-into-view below.
-  keepVisibleEl: {
-    type: Object,
-    default: null,
-  },
-});
-
 const { navigate } = useRouter();
 const todayNumber = getTodayPuzzleNumber();
 const history = getHistory();
-
-const stripRef = ref(null);
-const prefersReducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-
-// A small top margin (rather than 0) so the rank doesn't end up scrolled
-// flush against the very edge of the viewport.
-const KEEP_VISIBLE_TOP_MARGIN_PX = 12;
-
-onMounted(() => {
-  const strip = stripRef.value;
-  if (!strip) return;
-
-  const stripRect = strip.getBoundingClientRect();
-  // How far down we'd need to scroll to bring the strip's bottom fully
-  // into view (0 if it's already on screen) -- the same amount
-  // `scrollIntoView({block: 'end'})` would scroll by.
-  const wantedScroll = Math.max(0, stripRect.bottom - window.innerHeight);
-  if (wantedScroll === 0) return;
-
-  const keepVisibleRect = props.keepVisibleEl?.getBoundingClientRect();
-  // Never scroll further than the point where the keep-visible element's
-  // own top would be pushed above the margin -- if it's already past that
-  // point (a very short screen), don't scroll at all rather than push it
-  // further off.
-  const maxScroll = keepVisibleRect ? Math.max(0, keepVisibleRect.top - KEEP_VISIBLE_TOP_MARGIN_PX) : wantedScroll;
-  const scrollAmount = Math.min(wantedScroll, maxScroll);
-  if (scrollAmount <= 0) return;
-
-  window.scrollBy({ top: scrollAmount, behavior: prefersReducedMotion ? 'auto' : 'smooth' });
-});
 
 const recentDays = computed(() => {
   const days = [];
@@ -132,7 +84,7 @@ function goToArchive() {
 </script>
 
 <template>
-  <section ref="stripRef" class="archive-day-strip">
+  <section class="archive-day-strip">
     <h2 class="strip-heading">Catch up on recent days</h2>
     <div class="strip-track">
       <button

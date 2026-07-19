@@ -67,6 +67,22 @@ export function planFullSolution(geometry, startingMasks) {
 export async function watchSolve(game, delayBetweenMovesMs = 500) {
   const moves = planFullSolution(game.geometry, game.state.masks);
 
+  // Wait a tick before the first selection. The click that calls this
+  // (components/TemporaryWatchSolveButton.vue / the level editor's own
+  // button) is still bubbling up through the DOM at this point -- Vue's own
+  // click handler runs during the target phase, before the browser finishes
+  // propagating the event to `document`. components/Board.vue listens there
+  // for "clicked outside any hole" to clear the selection (see its
+  // handleNonHoleClick), and without this wait, that same original click
+  // would reach `document` immediately AFTER the line below selects the
+  // first peg -- synchronously deselecting it again before the second
+  // selectHole() call ever runs. Every move after that then gets played
+  // against a board that never actually changed, which is why this failed
+  // silently rather than throwing: each subsequent "from" often still had
+  // SOME legal move available (just never the planned one), so it kept
+  // selecting pegs without ever completing a jump.
+  await wait(0);
+
   for (const move of moves) {
     game.selectHole(move.from);
     await wait(delayBetweenMovesMs / 3);

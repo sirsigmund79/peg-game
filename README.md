@@ -224,8 +224,8 @@ src/
     StatBar.vue                     Pegs left / moves / target chips above the board
     Controls.vue                    Undo + Reset buttons
     GhostToggle.vue                 Ghost Outline's beneath-the-board on/off toggle (see "Ghost Outline" above)
-    ResultHeader.vue / ResultToggle.vue / ResultStatRow.vue / ResultFooter.vue
-                                     Result screen: rank header, This-game/Best toggle, score row, share + reset
+    ResultHeader.vue / DotsLeftOnBoard.vue / RankLadder.vue / ResultFooter.vue
+                                     Result screen: rank header, dots-left tally (with inline Goal), rank ladder, share + reset
     PlayView.vue                    The actual game screen -- loads a puzzle, plays it, shows the result
     ArchiveView.vue / ArchiveDayStrip.vue
                                      Browse/replay past days, and the result screen's "nearby days" strip

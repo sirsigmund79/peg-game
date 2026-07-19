@@ -177,18 +177,12 @@ export function countPegsRemaining(masks) {
  * always `overPar === 0` under the old single-color rule; these thresholds
  * carry that over unchanged). Kept as one ordered list (rather than a
  * chain of if-statements) for easy scanning/testing.
- *
- * `size` is the rank title's font size on the result screen -- de-emphasizes
- * the lower tiers so GENIUS stays the one hero-sized moment. The bottom two
- * tiers share the same size: "Warming Up" isn't the embarrassing joke the
- * old bottom-tier copy was, so it doesn't need to read any smaller than
- * "Not bad".
  */
 export const RANK_TIERS = [
-  { overPar: null, rank: 'Warming Up', emoji: '', size: '1.25rem' },
-  { overPar: 2, rank: 'Not bad', emoji: '', size: '1.25rem' },
-  { overPar: 1, rank: 'Purty smart', emoji: '', size: '1.55rem' },
-  { overPar: 0, rank: 'Genius', emoji: '🧠', size: '1.9rem' },
+  { overPar: null, rank: 'Warming Up', emoji: '' },
+  { overPar: 2, rank: 'Not bad', emoji: '' },
+  { overPar: 1, rank: 'Purty smart', emoji: '' },
+  { overPar: 0, rank: 'Genius', emoji: '🧠' },
 ];
 
 /**
@@ -198,9 +192,41 @@ export const RANK_TIERS = [
  * the exact same wording.
  *
  * @param {number} overPar
- * @returns {{rank: string, emoji: string, size: string}}
+ * @returns {{rank: string, emoji: string}}
  */
 export function getRankForOverPar(overPar) {
   const tier = RANK_TIERS.find((candidate) => candidate.overPar === overPar) ?? RANK_TIERS[0];
-  return { rank: tier.rank, emoji: tier.emoji, size: tier.size };
+  return { rank: tier.rank, emoji: tier.emoji };
+}
+
+/**
+ * The RANK_TIERS index for a given overPar -- 0 (worst, "Warming Up") through
+ * RANK_TIERS.length - 1 (best, "Genius"). Lets callers compare two results by
+ * which RANK they earned rather than their raw overPar numbers, which can
+ * differ within the same tier -- "Warming Up" is a catch-all for every
+ * overPar of 3 or more, so e.g. overPar 5 and overPar 3 both map to the same
+ * tier index even though 3 < 5.
+ *
+ * @param {number} overPar
+ * @returns {number}
+ */
+export function getRankTierIndex(overPar) {
+  const index = RANK_TIERS.findIndex((tier) => tier.overPar === overPar);
+  return index === -1 ? 0 : index;
+}
+
+/**
+ * How many more pegs a player would need to clear to reach a given rank
+ * tier, from their current overPar -- the result screen's rank ladder shows
+ * this on every tier above the one just achieved (e.g. "2 dots to go").
+ * Generalizes the old single Genius-only "N dots shy of Genius" callout to
+ * every tier in RANK_TIERS.
+ *
+ * @param {number} overPar - the player's current overPar
+ * @param {number|null} tierOverPar - the target tier's `overPar` (see RANK_TIERS) -- null is the bottom catch-all tier, always already reached
+ * @returns {number} 0 if the tier is already reached (or is the bottom catch-all), else the positive distance
+ */
+export function getDotsToRank(overPar, tierOverPar) {
+  if (tierOverPar === null) return 0;
+  return Math.max(0, overPar - tierOverPar);
 }

@@ -4,15 +4,15 @@
 // Remembers the BEST result ever recorded for each daily puzzle, across every
 // replay -- a distinct concept from logic/history.js's single "most recent
 // attempt" record, which gets silently overwritten on every replay. This is
-// what powers the result screen's "This game" vs "Best" toggle (see
-// components/PlayView.vue).
+// what seeds composables/useGame.js's `previousBest` (the result screen's
+// rank-ladder baseline and "New best!" pill) and StatsView.vue's rank
+// breakdown.
 //
 // Unlike history.js, a best-result record includes the actual final board
 // state (one bigint mask per color -- see logic/rules.js), not just the
-// aggregate per-color peg counts, so the "Best" view can show the real board
-// a player left behind, not just its tallies. BigInt can't survive
-// JSON.stringify (which logic/storage.js's safeGet/safeSet use under the
-// hood), so masks are converted to/from strings at this file's own boundary.
+// aggregate per-color peg counts. BigInt can't survive JSON.stringify (which
+// logic/storage.js's safeGet/safeSet use under the hood), so masks are
+// converted to/from strings at this file's own boundary.
 //
 // Deliberately starts tracking fresh from whenever this shipped, rather than
 // trying to reconcile against pre-existing history.js records (which have no

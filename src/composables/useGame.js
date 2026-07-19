@@ -22,11 +22,12 @@ import {
   isRoundOver,
   countPegsRemaining,
   getRankForOverPar,
+  getRankTierIndex,
 } from '../logic/rules.js';
 import { vibrateJump, vibrateRoundOver, vibrateInvalid } from '../fx/haptics.js';
 import { playRoundOverChime } from '../fx/sound.js';
 import { recordResult, getResultForPuzzle } from '../logic/history.js';
-import { recordBestIfBetter } from '../logic/bestResults.js';
+import { getBestForPuzzle, recordBestIfBetter } from '../logic/bestResults.js';
 import { getFinishedMasks, recordRoundFinished, clearRoundFinished } from '../logic/roundState.js';
 import { recordPegCleared, recordPlaythroughEnded, recordGiveUpReset, recordGeniusReached } from '../logic/badgeStats.js';
 import { isGiveUpReset } from '../logic/attemptBoundary.js';
@@ -58,6 +59,11 @@ export function useGame(puzzle, options = {}) {
   // starting position -- see the `restoredFinished` flag below, which
   // components/PlayView.vue uses to jump straight to the result screen.
   const restoredMasks = puzzle.puzzleNumber != null ? getFinishedMasks(puzzle.puzzleNumber) : undefined;
+
+  // Seeds both `state.previousBest` and `state.sessionBest` below -- they
+  // start out equal and only diverge once an attempt this session actually
+  // beats it (see those fields' own comments for why two separate values).
+  const priorBest = puzzle.puzzleNumber != null ? getBestForPuzzle(puzzle.puzzleNumber) : undefined;
 
   // `state` is the one reactive object every other function below reads
   // from and writes to. Because it's created with Vue's reactive(), any
@@ -101,6 +107,29 @@ export function useGame(puzzle, options = {}) {
     // one session -- see the note in reset() below), this one always starts
     // back at 0 for a fresh attempt.
     attemptUndoCount: 0,
+    // The best-ever result recorded for this puzzle before the attempt
+    // whose result is CURRENTLY showing -- frozen for that attempt's whole
+    // result screen (see reset() below, which refreshes it from
+    // `sessionBest` at the start of the NEXT attempt). components/
+    // RankLadder.vue reads this as the baseline its one-shot climb
+    // animates FROM, so it must stay put through that animation even
+    // though `sessionBest` itself may ratchet past it moments after this
+    // attempt finishes.
+    previousBest: priorBest,
+    // The live, ratcheting best rank earned on this puzzle so far --
+    // across every attempt this session, not just whichever one is
+    // currently showing. Seeded the same as previousBest, then advances
+    // in place (see jump() below) whenever an attempt reaches a higher
+    // rank tier than anything before it. reset() copies this into
+    // previousBest at the start of each new attempt, which is what makes a
+    // same-session Reset-and-replay compare against whatever this session
+    // has actually already earned, rather than a stale creation-time
+    // snapshot.
+    sessionBest: priorBest,
+    // True only immediately after a finish that raised the bar above --
+    // false the rest of the time, including a tie or a worse repeat (e.g.
+    // two different "Warming Up" results in a row).
+    justAchievedNewBest: false,
   });
 
   track(EVENTS.PUZZLE_STARTED, {
@@ -289,6 +318,26 @@ export function useGame(puzzle, options = {}) {
         recordRoundFinished(puzzle.puzzleNumber, state.masks);
         syncPlayerStatsToPostHog();
 
+        // A "new best" means this attempt reached a strictly HIGHER RANK
+        // than anything earned on this puzzle before it (this session or
+        // any earlier one) -- compared by rank TIER, not raw overPar, so
+        // two different "Warming Up" results (a catch-all tier covering
+        // every overPar of 3+) never count as an improvement over each
+        // other. Requires a previousBest to already exist -- a puzzle's
+        // very first-ever completion has nothing to beat yet, so it seeds
+        // the record quietly rather than celebrating a "new best" against
+        // nothing. Compared against state.previousBest (frozen for THIS
+        // attempt, not yet ratcheted -- see reset() for when that happens)
+        // rather than state.sessionBest, so a same-session Reset-and-replay
+        // correctly compares against whatever was already earned BEFORE
+        // this attempt, not a value this same attempt might be about to
+        // set.
+        state.justAchievedNewBest =
+          Boolean(state.previousBest) && getRankTierIndex(overParAtEnd) > getRankTierIndex(state.previousBest.overPar);
+        if (!state.sessionBest || getRankTierIndex(overParAtEnd) > getRankTierIndex(state.sessionBest.overPar)) {
+          state.sessionBest = { pegsRemaining: finalPegsRemaining, overPar: overParAtEnd, won, masks: state.masks };
+        }
+
         // Reaching a terminal state always ends the current attempt -- see
         // logic/attemptBoundary.js for how this differs from Reset.
         recordPlaythroughEnded(puzzle.puzzleNumber);
@@ -374,6 +423,12 @@ export function useGame(puzzle, options = {}) {
     state.moveCount = 0;
     state.attemptUndoCount = 0;
     state.roundStartedAt = Date.now();
+    state.justAchievedNewBest = false;
+    // Roll the just-finished attempt's result (if it raised the bar) into
+    // the baseline the NEXT attempt's ladder animates from and compares
+    // against -- see the state fields' own comments above for why this
+    // can't just happen the instant that attempt finished.
+    state.previousBest = state.sessionBest;
   }
 
   // NOTE: we wrap the returned object in reactive() so that computed refs
@@ -399,6 +454,8 @@ export function useGame(puzzle, options = {}) {
     // to jump straight to the result screen without replaying its reveal
     // animation. Fixed at creation time, not reactive to later resets.
     restoredFinished: restoredMasks !== undefined,
+    previousBest: computed(() => state.previousBest),
+    justAchievedNewBest: computed(() => state.justAchievedNewBest),
     holeHasPeg,
     getHoleColor,
     selectHole,

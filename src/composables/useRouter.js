@@ -40,6 +40,9 @@ export function useRouter() {
   /** Changes the URL hash, which triggers "hashchange" and updates `route` for every component using it. */
   function navigate(path) {
     window.location.hash = path;
+    // A real page load always starts scrolled to the top -- a hash change
+    // doesn't, since the browser has no new document to reset scroll for.
+    window.scrollTo(0, 0);
   }
 
   return { route, navigate };

@@ -5,9 +5,9 @@
   "Challenge A Friend" and "Reset", side by side, lifted out of the now-retired
   ResultOverlay.vue. Share always copies a spoiler-safe result line (built
   by the caller via services/viral.js -- see the `shareText` prop, sourced
-  from whichever result record components/PlayView.vue's This game/Best
-  toggle is currently showing) to the clipboard, THEN also opens the
-  device's native share sheet if one is available (see
+  from the just-finished round -- see components/PlayView.vue) to the
+  clipboard, THEN also opens the device's native share sheet if one is
+  available (see
   services/viral.js's shareResult(), built on the Web Share API) -- so on a
   phone this is a couple of taps to send straight to a contact or messaging
   app, with the clipboard copy as the reliable fallback everywhere else.
@@ -28,7 +28,6 @@ const props = defineProps({
   rank: { type: String, required: true },
   won: { type: Boolean, required: true },
   overPar: { type: Number, required: true },
-  resultSource: { type: String, required: true }, // 'this' | 'best' -- which toggle view was showing when Share was clicked
 });
 
 defineEmits(['reset']);
@@ -41,11 +40,10 @@ async function handleShareClick() {
     rank: props.rank,
     won: props.won,
     over_par: props.overPar,
-    result_source: props.resultSource,
   });
   const { copied, shared } = await shareResult(props.shareText);
   shareStatusMessage.value = copied ? 'Copied to clipboard!' : "Couldn't copy -- try again, or share a screenshot instead.";
-  track(EVENTS.SHARE_COPY_RESULT, { puzzle_number: props.puzzleNumber ?? null, success: copied, shared, result_source: props.resultSource });
+  track(EVENTS.SHARE_COPY_RESULT, { puzzle_number: props.puzzleNumber ?? null, success: copied, shared });
 }
 </script>
 

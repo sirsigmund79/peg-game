@@ -54,19 +54,25 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
-  // A specific bigint[] mask snapshot to render INSTEAD of the live game's
-  // own state.masks -- used to show a saved "Best" attempt (see
-  // logic/bestResults.js) that may differ from whatever `game` currently
-  // holds. Left null, this component reads live state exactly as before.
-  masksOverride: {
+  // Hole indexes whose peg has already departed on the result screen's
+  // fly-to-tally reveal (see composables/useResultReveal.js) -- hidden here
+  // rather than removed from `game.state.masks` itself, since the
+  // underlying game state shouldn't change just because a cosmetic reveal
+  // is mid-flight.
+  flownHoleIndexes: {
     type: Array,
-    default: null,
+    default: () => [],
   },
-  // Hole index to briefly pulse -- drives the result screen's sequential
-  // score-reveal walk. -1 means no hole is currently pulsing.
-  pulsingIndex: {
-    type: Number,
-    default: -1,
+  // Set once every surviving peg has flown to the result screen's "Dots
+  // Left On Board" tally -- collapses this board out of the layout
+  // entirely (see the `.board.cleared` rules below) so the rank ladder
+  // below it can take that vertical space. This board stays the same
+  // persistent element throughout (never unmounted -- see the file header
+  // comment above), so a later Reset/replay simply un-collapses it again
+  // rather than needing a fresh one.
+  cleared: {
+    type: Boolean,
+    default: false,
   },
 });
 
@@ -86,39 +92,28 @@ function rippleDelayMs(index) {
   return Math.round((boardCenterDistances.value[index] / maxRippleDistance.value) * RIPPLE_STAGGER_SPAN_MS);
 }
 
-// Whichever masks array is actually on screen right now -- `masksOverride`
-// if given (a static snapshot, e.g. the result screen's "Best" view), else
-// the live game's own state. Reading hole contents through this ONE array
-// (rather than branching per-function between `masksOverride` and
-// `props.game.holeHasPeg`/`getHoleColor`) means every helper below shares
-// the exact same source of truth instead of re-deriving the same branch six
-// different ways.
-const activeMasks = computed(() => props.masksOverride ?? props.game.state.masks);
-
-// True only for the live, playable board -- false whenever a static
-// snapshot is being shown instead (masksOverride set). Selection, taps, and
-// the jump-arc animation all gate on this, so a snapshot view can never be
-// nudged into looking interactive, and a future jump on the underlying live
-// `game` (e.g. from a dev tool) can't animate across a snapshot that isn't
-// actually showing that game's current state.
-const interactive = computed(() => props.masksOverride === null);
+// Whichever masks array is actually on screen right now -- reading hole
+// contents through this ONE computed (rather than every helper below
+// reading `props.game.state.masks` directly) keeps a single source of
+// truth in one place.
+const activeMasks = computed(() => props.game.state.masks);
 
 function isSelected(index) {
-  return interactive.value && props.game.state.selectedHole === index;
+  return props.game.state.selectedHole === index;
 }
 
 function isValidTarget(index) {
-  return interactive.value && props.game.validTargetHoles.includes(index);
+  return props.game.validTargetHoles.includes(index);
 }
 
 /** Whether hole `index`'s ring should render dotted -- Ghost Outline's "you already made this exact jump from this exact board state today" cue (see logic/ghostMoves.js). Purely a memory aid; never a hint about which move is good. */
 function isGhostRepeat(index) {
-  return interactive.value && props.game.ghostRepeatedTargetHoles.includes(index);
+  return props.game.ghostRepeatedTargetHoles.includes(index);
 }
 
 /** Whether hole `index` is an EMPTY hole the selected peg can't reach right now -- every empty hole except the (possibly zero) legal landing spots. Gently greyed out so it's obvious at a glance which open spaces are actually in play, not just which ones are. */
 function isBlocked(index) {
-  return interactive.value && props.game.state.selectedHole !== null && !holeHasPeg(index) && !isValidTarget(index);
+  return props.game.state.selectedHole !== null && !holeHasPeg(index) && !isValidTarget(index);
 }
 
 /** Whether hole `index` has a peg right now, per `activeMasks`. */
@@ -205,11 +200,8 @@ watch(
   () => props.game.state.lastMove,
   (move) => {
     // Reduced-motion players get the instant, un-animated state change --
-    // never start the arc tween for them. A static snapshot (masksOverride
-    // set) never animates either, even if the underlying `game` it's
-    // attached to happens to record a move -- there's no guarantee that
-    // move has anything to do with the snapshot currently on screen.
-    if (move && interactive.value && !prefersReducedMotion) animateJump(move);
+    // never start the arc tween for them.
+    if (move && !prefersReducedMotion) animateJump(move);
   }
 );
 
@@ -229,7 +221,7 @@ let shakeTimeoutId = null;
 watch(
   () => props.game.state.invalidAttempt,
   (attempt) => {
-    if (!attempt || !interactive.value) return;
+    if (!attempt) return;
     if (shakeTimeoutId !== null) clearTimeout(shakeTimeoutId);
     shakingHoleIndex.value = attempt.pegIndex;
     shakeTimeoutId = setTimeout(() => {
@@ -239,8 +231,9 @@ watch(
   }
 );
 
-/** Whether hole `index` should currently show a peg -- overridden during a jump animation so the traveling peg (not the destination hole) reads as "carrying" it, and the jumped peg stays visible long enough to dissolve. */
+/** Whether hole `index` should currently show a peg -- overridden during a jump animation so the traveling peg (not the destination hole) reads as "carrying" it, and the jumped peg stays visible long enough to dissolve. Also hidden once its result-screen fly-to-tally reveal has taken it over (see the `flownHoleIndexes` prop above). */
 function shouldShowPeg(index) {
+  if (props.flownHoleIndexes.includes(index)) return false;
   const move = animatingMove.value;
   if (move) {
     if (index === move.to) return false;
@@ -254,9 +247,7 @@ function isDissolving(index) {
   return animatingMove.value?.over === index;
 }
 
-/** Taps are ignored once a specific (non-live) board snapshot is being shown -- e.g. the result screen's "Best" view -- since there's no live game to act on. Live play still delegates to game.selectHole(), which itself already no-ops once the round is over. */
 function handleHoleClick(index) {
-  if (!interactive.value) return;
   props.game.selectHole(index);
 }
 
@@ -270,7 +261,6 @@ function handleHoleClick(index) {
 // so this only needs to catch the gap that's left: a tap that never landed
 // on a hole button at all.
 function handleNonHoleClick(event) {
-  if (!interactive.value) return;
   if (props.game.state.selectedHole === null) return;
   if (event.target.closest('.hole')) return;
   props.game.deselect();
@@ -279,12 +269,23 @@ function handleNonHoleClick(event) {
 onMounted(() => {
   document.addEventListener('click', handleNonHoleClick);
 });
+
+// Lets composables/useResultReveal.js measure this board's real on-screen
+// position (combined with the pure computeDisplayPositions() math already
+// used above) to fly surviving pegs to the result screen's tally -- without
+// Board itself needing to know anything about tallies, ladders, or reveals.
+const boardRootRef = ref(null);
+function getRootRect() {
+  return boardRootRef.value?.getBoundingClientRect() ?? null;
+}
+defineExpose({ getRootRect });
 </script>
 
 <template>
   <div
+    ref="boardRootRef"
     class="board"
-    :class="{ 'round-over': game.roundOver, compact }"
+    :class="{ 'round-over': game.roundOver, compact, cleared }"
     :style="{ '--hole-size': holeDiameterPercent + '%' }"
   >
     <div class="hole-plane">
@@ -298,14 +299,12 @@ onMounted(() => {
           selected: isSelected(index),
           target: isValidTarget(index),
           'target-repeat': isGhostRepeat(index),
-          pulsing: index === pulsingIndex,
           shaking: index === shakingHoleIndex,
           blocked: isBlocked(index),
         }"
         :style="{ left: position.left, top: position.top, '--ripple-delay': rippleDelayMs(index) + 'ms' }"
         :aria-label="holeAriaLabel(index)"
-        :aria-pressed="interactive ? isSelected(index) : undefined"
-        :tabindex="interactive ? undefined : -1"
+        :aria-pressed="isSelected(index)"
         @click="handleHoleClick(index)"
       >
         <span
@@ -377,8 +376,46 @@ onMounted(() => {
   cursor: default;
 }
 
+/* Once every surviving peg has flown to the result screen's tally (see the
+   `cleared` prop above), this collapses the board's own footprint to
+   nothing -- rather than removing it from the DOM (this stays the one
+   persistent board element throughout, per the file header comment) -- so
+   the rank ladder below takes the vertical space it leaves behind. A
+   faster, narrower transition than `.board`'s own compact-size one above:
+   this only ever plays once, right after the fly reveal, so it doesn't
+   need to match that slower "settling into a card" pace. */
+.board.cleared {
+  height: 0;
+  padding: 0;
+  border-width: 0;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+  /* Longhand (not the `margin` shorthand) so the base rule's `margin: 0
+     auto` horizontal centering above is left alone -- this only pulls the
+     top/bottom in. Flex `gap` on PlayView.vue's `.game-area` still applies
+     on both sides of this element even collapsed to zero height, so
+     without this the rank name -> tally gap would read as double
+     `.game-area`'s gap (18px + 0 + 18px) instead of matching
+     `.result-anchor`'s 14px date -> rank-name gap; -11px/-11px brings the
+     total down to 18 - 11 - 11 + 18 = 14. */
+  margin-top: -11px;
+  margin-bottom: -11px;
+  transition:
+    height 0.22s ease,
+    padding 0.22s ease,
+    border-width 0.22s ease,
+    opacity 0.18s ease,
+    margin-top 0.22s ease,
+    margin-bottom 0.22s ease;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .board {
+    transition: none;
+  }
+
+  .board.cleared {
     transition: none;
   }
 }
@@ -457,11 +494,7 @@ onMounted(() => {
    Scoped to :not(.compact): `round-over` never turns back off, but
    `compact` turns on ~800ms later (see PlayView.vue's RESULT_HOLD_MS) --
    so this still fires exactly once, at full size, the instant the round
-   ends. Without the :not(.compact) guard, switching the result screen's
-   This game/Best toggle later (which adds/removes individual .peg
-   elements as the shown board snapshot changes) would re-trigger this
-   pulse on every newly-inserted peg, which the toggle is explicitly meant
-   NOT to do. */
+   ends. */
 .board.round-over:not(.compact) .hole.filled .peg:not(.dissolving) {
   animation: peg-pulse 0.5s ease-out;
   animation-delay: var(--ripple-delay, 0ms);
@@ -484,32 +517,6 @@ onMounted(() => {
 
 @media (prefers-reduced-motion: reduce) {
   .board.round-over:not(.compact) .hole.filled .peg:not(.dissolving) {
-    animation: none;
-  }
-}
-
-/* The result screen's sequential score-reveal walk (see
-   composables/useResultReveal.js) briefly pulses one hole at a time as it
-   ticks that peg's color count up -- this is the "it's this one's turn"
-   cue. */
-.hole.pulsing .peg {
-  animation: hole-pulse 0.3s ease-out;
-}
-
-@keyframes hole-pulse {
-  0% {
-    transform: scale(1);
-  }
-  40% {
-    transform: scale(1.35);
-  }
-  100% {
-    transform: scale(1);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .hole.pulsing .peg {
     animation: none;
   }
 }

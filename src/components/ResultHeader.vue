@@ -2,14 +2,16 @@
   ============================================================================
   components/ResultHeader.vue
   ----------------------------------------------------------------------------
-  The result screen's header: the rank ("Genius", "Warming Up", ...),
-  sized by tier (Genius stays the hero moment, lower tiers are progressively
-  de-emphasized -- see logic/rules.js's RANK_TIERS), and a small "N dots shy
-  of Genius" callout for any non-Genius result. The rank -- and the
-  shy-of-Genius callout, which piggybacks on the same flag -- stay hidden
-  until `revealed` (see composables/useResultReveal.js) turns true, then pop
-  in together. The puzzle's date isn't repeated here -- see
-  components/PlayView.vue's `.puzzle-line`, already on screen above.
+  The result screen's header: just the rank itself ("Genius", "Warming
+  Up", ...), always the same size now -- there's no embarrassing bottom-tier
+  copy left to de-emphasize (see logic/rules.js's RANK_TIERS), so every tier
+  gets the same treatment. Stays hidden until `revealed` (see
+  composables/useResultReveal.js) turns true, then pops in. The old "N dots
+  shy of Genius" callout that used to live here has been generalized to
+  every tier and moved into components/RankLadder.vue's own "N dots to go"
+  labels. The puzzle's date
+  isn't repeated here -- see components/PlayView.vue's `.puzzle-line`,
+  already on screen above.
 
   Swaps out for StatBar.vue in components/PlayView.vue's `.game-area` once the
   round is over -- see PlayView.vue for why components/Board.vue itself stays
@@ -17,28 +19,18 @@
   ============================================================================
 -->
 <script setup>
-import { computed } from 'vue';
-
-const props = defineProps({
-  record: { type: Object, required: true }, // {rank, emoji, size} -- see logic/rules.js's getRankForOverPar
-  overPar: { type: Number, required: true },
+defineProps({
+  record: { type: Object, required: true }, // {rank, emoji} -- see logic/rules.js's getRankForOverPar
   revealed: { type: Boolean, default: false },
-});
-
-const shyMessage = computed(() => {
-  const n = props.overPar;
-  if (n <= 0) return null; // Genius -- nothing to be shy about
-  return n <= 2 ? `${n} dot${n === 1 ? '' : 's'} shy of Genius. So close!` : `${n} dots shy of Genius`;
 });
 </script>
 
 <template>
   <header class="result-header">
-    <p class="rank-title" :class="{ revealed }" :style="{ fontSize: record.size }">
+    <p class="rank-title" :class="{ revealed }">
       <span v-if="record.emoji" aria-hidden="true">{{ record.emoji }}</span>
       {{ record.rank }}
     </p>
-    <p v-if="shyMessage && revealed" class="shy-pill">{{ shyMessage }}</p>
   </header>
 </template>
 
@@ -51,6 +43,7 @@ const shyMessage = computed(() => {
   margin: 0;
   font-family: var(--font-display);
   font-weight: 800;
+  font-size: 1.55rem;
   letter-spacing: 0.01em;
   text-transform: uppercase;
   color: var(--color-ink);
@@ -58,7 +51,6 @@ const shyMessage = computed(() => {
      finishes, then pops in as the achieved rank -- kept in layout (not
      display:none) so the header doesn't jump when it appears. */
   opacity: 0;
-  transition: font-size 0.2s ease;
 }
 
 .rank-title.revealed {
@@ -81,29 +73,10 @@ const shyMessage = computed(() => {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .rank-title {
-    transition: none;
-  }
-
   .rank-title,
   .rank-title.revealed {
     opacity: 1;
     animation: none;
   }
-}
-
-/* Pine-green progress callout -- neutral (no false enthusiasm) once more
-   than 2 dots separate this result from Genius; see the shyMessage computed
-   above. */
-.shy-pill {
-  display: inline-block;
-  margin: 8px 0 0;
-  padding: 4px 12px;
-  border-radius: 999px;
-  background: rgba(28, 140, 82, 0.12);
-  color: var(--color-peg);
-  font-family: var(--font-ui);
-  font-weight: 700;
-  font-size: 0.78rem;
 }
 </style>

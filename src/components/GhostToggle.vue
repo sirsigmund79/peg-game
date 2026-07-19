@@ -12,9 +12,7 @@
 
   Self-contained: reads composables/useGhostOutline.js's singleton directly
   rather than taking props, since this is global settings (one value for the
-  whole app), not per-instance state -- same reasoning ResultToggle.vue's
-  header comment gives for why that one DOES take props (it's a per-screen
-  view choice, not a setting).
+  whole app), not per-instance state.
   ============================================================================
 -->
 <script setup>
