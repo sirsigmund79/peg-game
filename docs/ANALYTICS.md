@@ -71,8 +71,9 @@ dev-vs-production split `app_env` already covers.
 | `stats_archive_cta_clicked` | "Check out the Archive" tapped on the stats page (`StatsView.vue`) | — |
 | `badge_unlocked` | A badge's unlock condition (see `logic/badges.js`) is newly satisfied | `badge_id`, `puzzle_number` |
 | `ghost_outline_baseline_captured` | Once per browser, on the first app boot after this instrumentation ships (`initAnalytics()`) | `baseline_genius_rate`, `baseline_lifetime_puzzles_completed`, `baseline_current_streak_days` |
-| `how_to_play_shown` | The How to Play modal opens — automatically on a browser's first-ever visit, or via the header's "?" button after that (`useHowToPlay.js`) | `source` (`auto`\|`manual`) |
-| `how_to_play_dismissed` | The How to Play modal closes | `source` (`manual`\|`backdrop`\|`escape`) |
+| `how_to_play_shown` | The How to Play walkthrough opens — only ever via the header's "?" button now (no longer auto-shown on first visit) (`useHowToPlay.js`) | `source` (`manual`) |
+| `how_to_play_step_viewed` | A walkthrough slide becomes visible (fires on open and on every Next/Back/dot navigation) (`HowToPlayModal.vue`) | `step` (1-indexed), `stepCount` |
+| `how_to_play_dismissed` | The How to Play walkthrough closes | `source` (`manual`\|`backdrop`\|`escape`), `step` (furthest 1-indexed slide reached) |
 | `$exception` | Any uncaught error/rejection | message, stack, `app_env` |
 
 Person properties (set on every `puzzle_completed`, from
@@ -307,15 +308,16 @@ significance calculation actually clear before deciding.
    *Secondary:* downstream `ref=share` visit volume (Dashboard 4). No new
    instrumentation needed — both metrics already exist.
 
-2. **First-time onboarding** — the How to Play modal now auto-opens on a
-   brand-new player's first-ever visit (`useHowToPlay.js`'s
-   `openIfFirstVisit()`), shipped directly rather than as a flagged
-   experiment, so there's no control group left to compare against.
-   *Hypothesis, if revisited later:* tweaking that modal's content/timing
-   (rather than whether it exists at all) moves D1 retention further.
-   *Primary metric:* D1 retention. *Secondary:* `puzzle_completed` rate on
-   a player's very first puzzle. *Requires:* a variant of the modal to test
-   against the current one, gated behind a flag.
+2. **First-time onboarding** — the How to Play walkthrough is no longer
+   auto-shown on a brand-new player's first visit (players found the
+   unprompted popup more confusing than helpful); it's now a multi-step
+   walkthrough reached only via the header's "?" button. *Hypothesis, if
+   revisited later:* re-introducing a gentler first-run prompt (or tweaking
+   the walkthrough's content) moves D1 retention. *Primary metric:* D1
+   retention. *Secondary:* `puzzle_completed` rate on a player's very first
+   puzzle, plus `how_to_play_step_viewed` drop-off across slides to see which
+   step loses people. *Requires:* a variant to test against the current one,
+   gated behind a flag.
 
 3. **Result-reveal pacing** — vary `RESULT_HOLD_MS` in `PlayView.vue` and
    the peg-pulse timing in `useResultReveal.js`. *Hypothesis:* a snappier
