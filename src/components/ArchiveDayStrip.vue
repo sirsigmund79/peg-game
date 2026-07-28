@@ -33,7 +33,7 @@
 import { computed } from 'vue';
 import { getTodayPuzzleNumber, getPuzzleForNumber } from '../logic/daily.js';
 import { getHistory } from '../logic/history.js';
-import { getRankForOverPar } from '../logic/rules.js';
+import { getRankForOverPar, removablePegCount } from '../logic/rules.js';
 import { useRouter } from '../composables/useRouter.js';
 import { EVENTS, track } from '../services/analytics.js';
 import PuzzleGlyph from './PuzzleGlyph.vue';
@@ -62,7 +62,7 @@ const recentDays = computed(() => {
       geometry: puzzle.geometry,
       emptyHoles: puzzle.emptyHoles,
       holeColors: puzzle.holeColors,
-      result: savedResult ? getRankForOverPar(savedResult.overPar) : null,
+      result: savedResult ? getRankForOverPar(savedResult.overPar, removablePegCount(puzzle.holeColors, puzzle.par)) : null,
     });
   }
   return days;

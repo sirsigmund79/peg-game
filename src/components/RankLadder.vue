@@ -43,6 +43,9 @@ import { RANK_TIERS, getDotsToRank, getRankTierIndex } from '../logic/rules.js';
 const props = defineProps({
   // The just-finished round's overPar (see composables/useGame.js).
   overPar: { type: Number, required: true },
+  // This puzzle's max clearable pegs -- the percentage denominator the rank
+  // tiers and "N dots to go" gaps are computed against (see logic/rules.js).
+  removable: { type: Number, required: true },
   // Whether THIS finish just raised previousBest -- see useGame.js's
   // `justAchievedNewBest`, computed there (not here) so it can compare
   // against the session's own ratcheted best rather than a value this
@@ -89,7 +92,7 @@ function clearPendingTimeouts() {
 /** Renders the fully-settled end state instantly, no animation -- used for reduced motion and for a restored/already-finished round. */
 function settleInstantly() {
   clearPendingTimeouts();
-  const targetIndex = getRankTierIndex(props.overPar);
+  const targetIndex = getRankTierIndex(props.overPar, props.removable);
   rungs.forEach((rung, index) => {
     rung.appeared = true;
     rung.status = index === targetIndex ? 'current' : index < targetIndex ? 'earned' : 'unearned';
@@ -100,7 +103,7 @@ function settleInstantly() {
 /** The one-shot stamp-in-then-climb sequence -- see the file header above. */
 function playEntrance() {
   clearPendingTimeouts();
-  const targetIndex = getRankTierIndex(props.overPar);
+  const targetIndex = getRankTierIndex(props.overPar, props.removable);
   // No pill on Genius -- see the file header comment for why.
   newBestAchieved.value = props.newBest && targetIndex !== RANK_TIERS.length - 1;
 
@@ -165,7 +168,7 @@ const rungsForDisplay = computed(() =>
 );
 
 function dotsToGo(tier) {
-  return getDotsToRank(props.overPar, tier.overPar);
+  return getDotsToRank(props.overPar, props.removable, tier.minCompletion);
 }
 </script>
 

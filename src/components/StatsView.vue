@@ -43,10 +43,10 @@
 <script setup>
 import { getBadgeStats } from '../logic/badgeStats.js';
 import { getHistory } from '../logic/history.js';
-import { getTodayPuzzleNumber } from '../logic/daily.js';
+import { getTodayPuzzleNumber, getPuzzleForNumber } from '../logic/daily.js';
 import { computeStreaks } from '../logic/streaks.js';
 import { getAllBestResults } from '../logic/bestResults.js';
-import { RANK_TIERS, getRankForOverPar } from '../logic/rules.js';
+import { RANK_TIERS, getRankForOverPar, removablePegCount } from '../logic/rules.js';
 import { useRouter } from '../composables/useRouter.js';
 import { useGhostOutline } from '../composables/useGhostOutline.js';
 import { EVENTS, track } from '../services/analytics.js';
@@ -70,11 +70,18 @@ const headlineStats = [
 
 // One color per RANK_TIERS slot, in the same worst -> best order -- see the
 // file header above for how this ramp was derived and validated.
-const RANK_BAR_COLORS = ['#9fbea9', '#7eab8d', '#559a6f', '#1c8c52'];
+const RANK_BAR_COLORS = ['#a8c4b1', '#86b295', '#63a37b', '#3f9563', '#1c8c52'];
 
+// Ranks are percentage-based now (see logic/rules.js), so tallying a stored
+// result needs that puzzle's `removable` denominator -- not kept in the
+// result record, but rebuildable from its puzzle number via getPuzzleForNumber
+// (deterministic + memoized), the same rebuild the archive already does per
+// row. Hence Object.entries (not values): we need the puzzle-number key.
 const rankCounts = new Map(RANK_TIERS.map((tier) => [tier.rank, 0]));
-Object.values(getAllBestResults()).forEach(({ overPar }) => {
-  const { rank } = getRankForOverPar(overPar);
+Object.entries(getAllBestResults()).forEach(([puzzleNumber, { overPar }]) => {
+  const puzzle = getPuzzleForNumber(Number(puzzleNumber));
+  const removable = removablePegCount(puzzle.holeColors, puzzle.par);
+  const { rank } = getRankForOverPar(overPar, removable);
   rankCounts.set(rank, rankCounts.get(rank) + 1);
 });
 

@@ -62,7 +62,7 @@ dev-vs-production split `app_env` already covers.
 | `puzzle_first_move` | First jump of a round | `puzzle_number` |
 | `puzzle_undo_used` | Undo pressed | `puzzle_number`, `move_count_before_undo` |
 | `puzzle_reset_used` | Reset pressed after ≥1 move | `puzzle_number`, `move_count_before_reset`, `repeat_move_count`, `cumulative_move_count`, `ghost_outline_used` |
-| `puzzle_completed` | Round ends, any outcome | `puzzle_number`, `puzzle_date`, `board_shape`, `color_count`, `won`, `rank`, `over_par`, `move_count`, `undo_count`, `reset_count`, `duration_ms`, `source`, `repeat_move_count`, `cumulative_move_count`, `ghost_outline_used` |
+| `puzzle_completed` | Round ends, any outcome | `puzzle_number`, `puzzle_date`, `board_shape`, `color_count`, `won`, `rank`, `over_par`, `completion_percent`, `move_count`, `undo_count`, `reset_count`, `duration_ms`, `source`, `repeat_move_count`, `cumulative_move_count`, `ghost_outline_used` |
 | `puzzle_left_incomplete` | Player leaves mid-round (route away, tab hidden, or tab closed) — fires once per round | `puzzle_number`, `move_count`, `time_spent_ms`, `repeat_move_count`, `cumulative_move_count`, `ghost_outline_used` |
 | `share_clicked` | "Challenge A Friend" tapped | `puzzle_number`, `rank`, `won`, `over_par` |
 | `share_copy_result` | Clipboard copy resolves | `puzzle_number`, `success` |

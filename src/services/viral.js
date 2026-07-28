@@ -23,17 +23,18 @@ export const SITE_URL = 'https://dothopper.com/';
  * Builds the short, spoiler-safe text people post when they share a result
  * -- a one-line challenge naming the rank that result earned, the puzzle's
  * date, one row per peg color with that color's circle emoji repeated once
- * per surviving peg (in color order, colors with none left omitted), and a
- * link straight to that day's puzzle.
+ * per surviving peg (in color order, colors with none left omitted), an
+ * optional "Tries: N" line, and a link straight to that day's puzzle.
  *
  * @param {object} params
  * @param {number[]} params.pegsRemaining - final per-color peg counts, color-index order
  * @param {number|null} [params.puzzleNumber] - the day's puzzle number (see logic/daily.js); omitted/null for a one-off custom design, which has no day to link to
  * @param {string|null} [params.formattedDate] - the puzzle's date, already formatted for display (see PlayView.vue's formattedDate); omitted/null for a custom design
  * @param {string|null} [params.rank] - the rank copy earned by this result (see logic/rules.js's getRankForOverPar); omitted/null to leave it out
+ * @param {number|null} [params.tries] - total attempts on this puzzle (see logic/badgeStats.js's getAttemptsForPuzzle); omitted/null or non-positive leaves the "Tries" line out (a custom design has no recorded attempts)
  * @returns {string}
  */
-export function buildShareText({ pegsRemaining, puzzleNumber = null, formattedDate = null, rank = null }) {
+export function buildShareText({ pegsRemaining, puzzleNumber = null, formattedDate = null, rank = null, tries = null }) {
   const emojiLines = pegsRemaining
     .map((count, colorIndex) => getPegColor(colorIndex).emoji.repeat(count))
     .filter((row) => row.length > 0)
@@ -48,8 +49,11 @@ export function buildShareText({ pegsRemaining, puzzleNumber = null, formattedDa
   // other visit, since PostHog auto-captures $current_url/$referrer but has
   // no other way to know a link came from this button. See the Virality
   // dashboard in docs/ANALYTICS.md.
+  // How many attempts it took -- only when it's a real, recorded count (a
+  // custom design has none). Not spoiler-y: it says nothing about the board.
+  const triesLine = typeof tries === 'number' && tries > 0 ? `\nTries: ${tries}` : '';
   const link = puzzleNumber === null ? `${SITE_URL}?ref=share` : `${SITE_URL}?ref=share#/play/${puzzleNumber}`;
-  return `${challengeLine}${dateLine}${emojiLines}\n${link}`;
+  return `${challengeLine}${dateLine}${emojiLines}${triesLine}\n${link}`;
 }
 
 /**

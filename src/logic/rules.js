@@ -79,6 +79,51 @@ export function getEmptyHolesFromColors(holeColors) {
 }
 
 /**
+ * How many pegs a puzzle STARTS with -- every hole that isn't empty (-1).
+ * The other half of the percentage denominator below (see removablePegCount).
+ *
+ * @param {number[]} holeColors
+ * @returns {number}
+ */
+export function startingPegCount(holeColors) {
+  return holeColors.filter((color) => color !== -1).length;
+}
+
+/**
+ * The most pegs this puzzle can possibly clear -- starting pegs minus par
+ * (the fewest that can ever remain). This is the denominator the rank
+ * percentage (see getCompletionPercent) is measured against: it's what
+ * separates "3 pegs over par on a tiny 12-peg board" from "3 over on a
+ * 34-peg board," where the same absolute miss is a much smaller share of
+ * everything that was ever clearable.
+ *
+ * @param {number[]} holeColors
+ * @param {number[]} par - the solver-proven best, one target count per color
+ * @returns {number}
+ */
+export function removablePegCount(holeColors, par) {
+  const parTotal = par.reduce((sum, count) => sum + count, 0);
+  return startingPegCount(holeColors) - parTotal;
+}
+
+/**
+ * Turns a result into "what percent of the clearable pegs did you clear" --
+ * 100 means you reached par (cleared everything that could ever come off),
+ * 0 means you cleared none of them. This is the single number the rank
+ * tiers below are keyed on, replacing the old raw "pegs over par."
+ *
+ * @param {number} overPar - pegs left beyond par (0 = perfect)
+ * @param {number} removable - see removablePegCount()
+ * @returns {number} 0..100
+ */
+export function getCompletionPercent(overPar, removable) {
+  // A board with nothing to clear (par === start) can't be measured as a
+  // fraction -- treat reaching par as a perfect 100, anything else as 0.
+  if (removable <= 0) return overPar <= 0 ? 100 : 0;
+  return ((removable - overPar) / removable) * 100;
+}
+
+/**
  * Checks whether a specific jump is legal on the given board right now.
  * A jump is legal when: the "from" hole has a peg, the "over" hole has a
  * peg of the SAME color as "from" (a peg can only jump over its own
@@ -169,64 +214,139 @@ export function countPegsRemaining(masks) {
 
 /**
  * The nostalgic Cracker Barrel rank copy, ordered WORST first, BEST last.
- * `overPar: null` marks the catch-all bottom tier ("3 or more over par").
- * Keyed on `overPar` -- how many MORE pegs total the player left behind
- * than the puzzle's solver-proven best -- rather than a raw peg count,
- * since that's the only measure that stays meaningful across boards with
- * different color counts and par totals (today's "left exactly 1 peg" was
- * always `overPar === 0` under the old single-color rule; these thresholds
- * carry that over unchanged). Kept as one ordered list (rather than a
- * chain of if-statements) for easy scanning/testing.
+ * Each tier is keyed on `minCompletion` -- the lowest completion PERCENT (see
+ * getCompletionPercent) that still earns it -- rather than a raw "pegs over
+ * par" count. Percentages are what keep the ranks fair across wildly
+ * different board sizes: leaving 3 pegs over par is a near-miss on a 34-peg
+ * octagon (you cleared ~89% of what was clearable) but a real stumble on a
+ * 12-peg triangle (~67%), and the old absolute thresholds punished both the
+ * same. Genius stays pinned to actually reaching par (100%). The bottom tier
+ * (`minCompletion: 0`) is the always-reached catch-all.
+ *
+ * Each tier also carries a `quips` list -- gentle, rotating ribs shown under
+ * the rank on the result screen (see getQuipForRank); several per tier so a
+ * player replaying the same puzzle sees a different one each try. Kept as one
+ * ordered list (rather than a chain of if-statements) for easy scanning and
+ * testing.
  */
 export const RANK_TIERS = [
-  { overPar: null, rank: 'Warming Up', emoji: '' },
-  { overPar: 2, rank: 'Not bad', emoji: '' },
-  { overPar: 1, rank: 'Purty smart', emoji: '' },
-  { overPar: 0, rank: 'Genius', emoji: '🧠' },
+  {
+    minCompletion: 0,
+    rank: 'Warming Up',
+    emoji: '',
+    quips: ['Everybody starts somewhere.', 'The board says hi.', 'Plenty of pegs to keep you company.'],
+  },
+  {
+    minCompletion: 50,
+    rank: 'Movin’ Up',
+    emoji: '',
+    quips: ['Progress! Sorta.', 'The pegs are winning, but barely.', 'Rome wasn’t cleared in a day.'],
+  },
+  {
+    minCompletion: 70,
+    rank: 'Not bad',
+    emoji: '',
+    quips: ['Cracker Barrel would nod.', 'Middle of the pack, and proud.', 'You’ve done worse. Probably.'],
+  },
+  {
+    minCompletion: 85,
+    rank: 'Purty smart',
+    emoji: '',
+    quips: ['So close you can taste it.', 'Par’s right there, sugar.', 'One good jump from glory.'],
+  },
+  {
+    minCompletion: 100,
+    rank: 'Genius',
+    emoji: '🧠',
+    quips: ['Par cleared. Show-off.', 'Nothing left to prove.', 'The board never stood a chance.'],
+  },
 ];
 
 /**
- * Turns "how many pegs over par" into its rank copy. Kept here (not in a
- * Vue component) so it's easy to unit test and so every screen that needs
- * rank text -- the result modal, the archive's played-day badges -- uses
- * the exact same wording.
+ * The RANK_TIERS entry earned by a result. Scans best-first and returns the
+ * highest tier whose `minCompletion` the result's completion percent clears;
+ * the `minCompletion: 0` catch-all always matches, so this never returns
+ * undefined.
  *
  * @param {number} overPar
+ * @param {number} removable - see removablePegCount()
+ * @returns {typeof RANK_TIERS[number]}
+ */
+function getRankTier(overPar, removable) {
+  const percent = getCompletionPercent(overPar, removable);
+  for (let index = RANK_TIERS.length - 1; index >= 0; index--) {
+    if (percent >= RANK_TIERS[index].minCompletion) return RANK_TIERS[index];
+  }
+  return RANK_TIERS[0];
+}
+
+/**
+ * Turns a result into its rank copy. Kept here (not in a Vue component) so
+ * it's easy to unit test and so every screen that needs rank text -- the
+ * result modal, the archive's played-day badges -- uses the exact same
+ * wording. Needs `removable` (not just overPar) now that ranks are
+ * percentage-based; every caller has it from the puzzle definition (or can
+ * rebuild it via daily.js's getPuzzleForNumber for a stored result).
+ *
+ * @param {number} overPar
+ * @param {number} removable - see removablePegCount()
  * @returns {{rank: string, emoji: string}}
  */
-export function getRankForOverPar(overPar) {
-  const tier = RANK_TIERS.find((candidate) => candidate.overPar === overPar) ?? RANK_TIERS[0];
+export function getRankForOverPar(overPar, removable) {
+  const tier = getRankTier(overPar, removable);
   return { rank: tier.rank, emoji: tier.emoji };
 }
 
 /**
- * The RANK_TIERS index for a given overPar -- 0 (worst, "Warming Up") through
+ * The RANK_TIERS index for a result -- 0 (worst, "Warming Up") through
  * RANK_TIERS.length - 1 (best, "Genius"). Lets callers compare two results by
  * which RANK they earned rather than their raw overPar numbers, which can
- * differ within the same tier -- "Warming Up" is a catch-all for every
- * overPar of 3 or more, so e.g. overPar 5 and overPar 3 both map to the same
- * tier index even though 3 < 5.
+ * differ within the same tier (each tier now covers a band of percentages,
+ * so several different overPar values on the same puzzle can share one tier).
  *
  * @param {number} overPar
+ * @param {number} removable - see removablePegCount()
  * @returns {number}
  */
-export function getRankTierIndex(overPar) {
-  const index = RANK_TIERS.findIndex((tier) => tier.overPar === overPar);
-  return index === -1 ? 0 : index;
+export function getRankTierIndex(overPar, removable) {
+  return RANK_TIERS.indexOf(getRankTier(overPar, removable));
+}
+
+/**
+ * A gentle, rotating rib for the rank a result earned -- shown under the rank
+ * on the result screen. Picks from the tier's `quips` by attempt count so a
+ * player replaying the same puzzle cycles through the options rather than
+ * seeing the same line every time; deterministic (no randomness), so it stays
+ * put across a re-render or a restored round.
+ *
+ * @param {number} overPar
+ * @param {number} removable - see removablePegCount()
+ * @param {number} tries - total attempts on this puzzle (1-based; see badgeStats.js)
+ * @returns {string}
+ */
+export function getQuipForRank(overPar, removable, tries) {
+  const { quips } = getRankTier(overPar, removable);
+  return quips[(Math.max(1, tries) - 1) % quips.length];
 }
 
 /**
  * How many more pegs a player would need to clear to reach a given rank
  * tier, from their current overPar -- the result screen's rank ladder shows
  * this on every tier above the one just achieved (e.g. "2 dots to go").
- * Generalizes the old single Genius-only "N dots shy of Genius" callout to
- * every tier in RANK_TIERS.
+ * Even though tiers are keyed on percentages now, the answer is still a whole
+ * number of pegs: clearing to tier threshold `t` needs
+ * `overPar <= removable * (1 - t/100)`, so the most pegs you can leave and
+ * still qualify is `floor(removable * (1 - t/100))`, and the gap is your
+ * current overPar minus that. For the top tier (t=100) that floor is 0 (par
+ * exactly); for the bottom catch-all (t=0) it's `removable`, so the gap is
+ * always 0 (already reached).
  *
  * @param {number} overPar - the player's current overPar
- * @param {number|null} tierOverPar - the target tier's `overPar` (see RANK_TIERS) -- null is the bottom catch-all tier, always already reached
- * @returns {number} 0 if the tier is already reached (or is the bottom catch-all), else the positive distance
+ * @param {number} removable - see removablePegCount()
+ * @param {number} tierMinCompletion - the target tier's `minCompletion`
+ * @returns {number} 0 if the tier is already reached, else the positive peg distance
  */
-export function getDotsToRank(overPar, tierOverPar) {
-  if (tierOverPar === null) return 0;
-  return Math.max(0, overPar - tierOverPar);
+export function getDotsToRank(overPar, removable, tierMinCompletion) {
+  const maxOverParForTier = Math.floor(removable * (1 - tierMinCompletion / 100));
+  return Math.max(0, overPar - maxOverParForTier);
 }
