@@ -272,6 +272,7 @@ const shareText = computed(() =>
     puzzleNumber: puzzle.value.puzzleNumber,
     formattedDate: formattedDate.value,
     rank: game.value.rank.rank,
+    tries: game.value.tries,
   })
 );
 
@@ -301,7 +302,7 @@ onBeforeUnmount(() => {
         <div class="result-group" :class="{ 'with-divider': showResult }">
           <div class="game-area">
             <StatBar v-if="!showResult" :pegs-remaining="game.pegsRemaining" :move-count="game.state.moveCount" :par="game.par" />
-            <ResultHeader v-else :record="game.rank" :revealed="reveal.rankRevealed" />
+            <ResultHeader v-else :record="game.rank" :quip="game.quip" :revealed="reveal.rankRevealed" />
 
             <Board
               ref="boardRef"
@@ -332,6 +333,7 @@ onBeforeUnmount(() => {
               v-if="showResult && reveal.ladderReady"
               :new-best="game.justAchievedNewBest"
               :over-par="game.overPar"
+              :removable="game.removable"
               :revealed="reveal.ladderReady"
               :instant="reveal.instant"
             />
@@ -348,6 +350,10 @@ onBeforeUnmount(() => {
                throughout (see its `compact` prop) and must never itself
                flicker opacity:0 as part of this. -->
           <div v-if="showResult" class="result-extras">
+            <!-- How many attempts this puzzle has taken (see useGame.js's
+                 `tries`) -- the same count that rides along in the share text.
+                 Omitted for custom designs, which record no attempts. -->
+            <p v-if="game.tries > 0" class="tries-line">Tries: {{ game.tries }}</p>
             <ResultFooter
               :share-text="shareText"
               :puzzle-number="puzzle.puzzleNumber"
@@ -490,6 +496,15 @@ onBeforeUnmount(() => {
      persistent Board element above (see its `compact` prop) never itself
      flickers through opacity:0 as part of it. */
   animation: result-extras-enter 0.35s ease-out;
+}
+
+.tries-line {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: 0.78rem;
+  letter-spacing: 0.02em;
+  color: var(--color-ink-dim);
 }
 
 @keyframes result-extras-enter {

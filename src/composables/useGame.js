@@ -21,15 +21,18 @@ import {
   applyMove,
   isRoundOver,
   countPegsRemaining,
+  removablePegCount,
+  getCompletionPercent,
   getRankForOverPar,
   getRankTierIndex,
+  getQuipForRank,
 } from '../logic/rules.js';
 import { vibrateJump, vibrateRoundOver, vibrateInvalid } from '../fx/haptics.js';
 import { playRoundOverChime } from '../fx/sound.js';
 import { recordResult, getResultForPuzzle } from '../logic/history.js';
 import { getBestForPuzzle, recordBestIfBetter } from '../logic/bestResults.js';
 import { getFinishedMasks, recordRoundFinished, clearRoundFinished } from '../logic/roundState.js';
-import { recordPegCleared, recordPlaythroughEnded, recordGiveUpReset, recordGeniusReached } from '../logic/badgeStats.js';
+import { recordPegCleared, recordPlaythroughEnded, recordGiveUpReset, recordGeniusReached, getAttemptsForPuzzle } from '../logic/badgeStats.js';
 import { isGiveUpReset } from '../logic/attemptBoundary.js';
 import { checkForNewlyUnlockedBadges } from '../logic/badgeUnlocks.js';
 import { encodeMasks, moveKey, getSeenMoveKeys, recordMoveSeen } from '../logic/ghostMoves.js';
@@ -53,6 +56,10 @@ export function useGame(puzzle, options = {}) {
   const startingMasks = createStartingMasks(puzzle.cellCount, puzzle.holeColors, puzzle.colorCount);
   const source = options.source ?? 'daily';
   const { ghost } = useGhostOutline();
+
+  // The percentage denominator every rank on this puzzle is measured against
+  // (see logic/rules.js) -- fixed for the whole puzzle, so compute it once.
+  const removable = removablePegCount(puzzle.holeColors, puzzle.par);
 
   // If this puzzle's last round finished and hasn't been Reset since (see
   // logic/roundState.js), resume showing that exact board instead of the
@@ -130,6 +137,11 @@ export function useGame(puzzle, options = {}) {
     // false the rest of the time, including a tie or a worse repeat (e.g.
     // two different "Warming Up" results in a row).
     justAchievedNewBest: false,
+    // Total attempts ended on this puzzle (see logic/badgeStats.js) -- drives
+    // the result screen's "Tries" count and the rotating rank quip. Seeded
+    // from storage so a restored, already-finished round shows the right
+    // number; bumped in jump()/reset() as new attempts end.
+    tries: puzzle.puzzleNumber != null ? getAttemptsForPuzzle(puzzle.puzzleNumber) : 0,
   });
 
   track(EVENTS.PUZZLE_STARTED, {
@@ -160,7 +172,12 @@ export function useGame(puzzle, options = {}) {
     return pegsRemaining.value.every((count, colorIndex) => count === puzzle.par[colorIndex]);
   });
 
-  const rank = computed(() => getRankForOverPar(overPar.value));
+  const rank = computed(() => getRankForOverPar(overPar.value, removable));
+
+  // The rotating rib shown under the rank on the result screen -- keyed on
+  // tries so a replay of the same puzzle cycles through the tier's options
+  // (see logic/rules.js's getQuipForRank).
+  const quip = computed(() => getQuipForRank(overPar.value, removable, state.tries));
 
   // Every legal move the selected peg could make right now (the full
   // {from, over, to} triples, not just the landing holes) -- Board.vue uses
@@ -333,15 +350,19 @@ export function useGame(puzzle, options = {}) {
         // this attempt, not a value this same attempt might be about to
         // set.
         state.justAchievedNewBest =
-          Boolean(state.previousBest) && getRankTierIndex(overParAtEnd) > getRankTierIndex(state.previousBest.overPar);
-        if (!state.sessionBest || getRankTierIndex(overParAtEnd) > getRankTierIndex(state.sessionBest.overPar)) {
+          Boolean(state.previousBest) &&
+          getRankTierIndex(overParAtEnd, removable) > getRankTierIndex(state.previousBest.overPar, removable);
+        if (!state.sessionBest || getRankTierIndex(overParAtEnd, removable) > getRankTierIndex(state.sessionBest.overPar, removable)) {
           state.sessionBest = { pegsRemaining: finalPegsRemaining, overPar: overParAtEnd, won, masks: state.masks };
         }
 
         // Reaching a terminal state always ends the current attempt -- see
-        // logic/attemptBoundary.js for how this differs from Reset.
+        // logic/attemptBoundary.js for how this differs from Reset. Refresh
+        // the Tries count straight from the counter this just bumped, so the
+        // result screen (and its quip) reflect the attempt that just ended.
         recordPlaythroughEnded(puzzle.puzzleNumber);
-        if (getRankForOverPar(overParAtEnd).rank === 'Genius') {
+        state.tries = getAttemptsForPuzzle(puzzle.puzzleNumber);
+        if (getRankForOverPar(overParAtEnd, removable).rank === 'Genius') {
           recordGeniusReached(puzzle.puzzleNumber, { attemptUndoCount: state.attemptUndoCount });
         }
         checkForNewlyUnlockedBadges(puzzle.puzzleNumber);
@@ -352,8 +373,9 @@ export function useGame(puzzle, options = {}) {
         board_shape: puzzle.boardId ?? null,
         color_count: puzzle.colorCount,
         won,
-        rank: getRankForOverPar(overParAtEnd).rank,
+        rank: getRankForOverPar(overParAtEnd, removable).rank,
         over_par: overParAtEnd,
+        completion_percent: Math.round(getCompletionPercent(overParAtEnd, removable)),
         move_count: state.moveCount,
         undo_count: state.undoCount,
         reset_count: state.resetCount,
@@ -406,6 +428,9 @@ export function useGame(puzzle, options = {}) {
     if (puzzle.puzzleNumber !== null && isGiveUpReset({ roundOverBeforeReset, moveCount: state.moveCount })) {
       recordGiveUpReset(puzzle.puzzleNumber);
       recordPlaythroughEnded(puzzle.puzzleNumber);
+      // That give-up counts as an attempt too -- keep Tries in step for the
+      // next round's result screen.
+      state.tries = getAttemptsForPuzzle(puzzle.puzzleNumber);
       checkForNewlyUnlockedBadges(puzzle.puzzleNumber);
     }
 
@@ -442,9 +467,17 @@ export function useGame(puzzle, options = {}) {
     par: puzzle.par,
     pegsRemaining,
     overPar,
+    // The percentage denominator for this puzzle's ranks (see logic/rules.js)
+    // -- components/RankLadder.vue needs it to place its rungs and "N dots to
+    // go" labels now that tiers are percentage-based.
+    removable,
     roundOver,
     hasWon,
     rank,
+    // The rotating rib under the rank on the result screen, and the total
+    // attempts ("Tries") on this puzzle -- see the state fields above.
+    quip,
+    tries: computed(() => state.tries),
     validMoves,
     validTargetHoles,
     ghostRepeatedTargetHoles,

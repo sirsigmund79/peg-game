@@ -21,7 +21,7 @@
 import { safeGet, safeSet } from './storage.js';
 
 const BADGE_STATS_KEY = 'dot-hop:badge-stats';
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 
 function defaultStats() {
   return {
@@ -38,6 +38,12 @@ function defaultStats() {
     // Puzzle numbers with at least one ended attempt -- a set, so a puzzle
     // replayed many times only counts once.
     playedThroughPuzzleIds: [],
+    // Total ended attempts PER puzzle number (unlike playedThroughPuzzleIds,
+    // which dedupes to a boolean "played it"). The result screen's "Tries"
+    // count reads this. Every ended attempt bumps it -- both a terminal
+    // finish and a give-up Reset, since both flow through
+    // recordPlaythroughEnded (see logic/attemptBoundary.js).
+    attemptsByPuzzle: {},
     // Lifetime count of give-up Resets (a Reset pressed with moves made,
     // before the round reached a terminal state) per puzzle number. A Reset
     // pressed to start a fresh attempt AFTER a round already ended doesn't
@@ -57,11 +63,13 @@ function defaultStats() {
 }
 
 function migrate(stored) {
-  // No migrations yet -- SCHEMA_VERSION 1 is the first shape this ever
-  // shipped with. A future version bump adds a branch here keyed on
-  // stored.version; this default-merge keeps old records readable meanwhile
-  // (e.g. a stats object saved before a new counter existed just gets that
-  // counter's zero value instead of crashing readers).
+  // The default-merge below keeps old records readable across schema bumps:
+  // any counter added in a later version (e.g. v2's per-puzzle
+  // `attemptsByPuzzle`) is simply absent from an older stored object, so it
+  // falls back to its default value instead of crashing readers. A v1 record
+  // just starts counting Tries fresh from here -- no back-fill of history.
+  // A future bump needing real data reshaping adds a branch keyed on
+  // stored.version.
   return {
     ...defaultStats(),
     ...stored,
@@ -108,8 +116,22 @@ export function recordPlaythroughEnded(puzzleNumber) {
   if (!stats.playedThroughPuzzleIds.includes(puzzleNumber)) {
     stats.playedThroughPuzzleIds.push(puzzleNumber);
   }
+  stats.attemptsByPuzzle[puzzleNumber] = (stats.attemptsByPuzzle[puzzleNumber] ?? 0) + 1;
   saveStore(stats);
   return stats;
+}
+
+/**
+ * How many attempts have ended on a puzzle -- the result screen's "Tries"
+ * count. Because recordPlaythroughEnded fires the instant a round hits its
+ * terminal state (before the result UI renders), this already includes the
+ * just-finished attempt by result time.
+ *
+ * @param {number} puzzleNumber
+ * @returns {number}
+ */
+export function getAttemptsForPuzzle(puzzleNumber) {
+  return getStore().attemptsByPuzzle[puzzleNumber] ?? 0;
 }
 
 /**
