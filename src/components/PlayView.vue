@@ -40,7 +40,9 @@
 -->
 <script setup>
 import { ref, watch, computed, onMounted, onBeforeUnmount } from 'vue';
-import { getTodaysPuzzle, getPuzzleForNumber } from '../logic/daily.js';
+import { getTodaysPuzzle, getPuzzleForNumber, getTodayPuzzleNumber } from '../logic/daily.js';
+import { getHistory } from '../logic/history.js';
+import { computeStreaks } from '../logic/streaks.js';
 import { useGame } from '../composables/useGame.js';
 import { useResultReveal } from '../composables/useResultReveal.js';
 import { useRouter } from '../composables/useRouter.js';
@@ -54,6 +56,7 @@ import StatBar from './StatBar.vue';
 import Controls from './Controls.vue';
 import GhostToggle from './GhostToggle.vue';
 import ResultHeader from './ResultHeader.vue';
+import ResultStreakPill from './ResultStreakPill.vue';
 import DotsLeftOnBoard from './DotsLeftOnBoard.vue';
 import RankLadder from './RankLadder.vue';
 import ResultFooter from './ResultFooter.vue';
@@ -266,6 +269,19 @@ watch(
 // DotsLeftOnBoard.vue, RankLadder.vue, and ResultFooter.vue, all driven
 // straight off `game` below.
 
+// The device's current daily streak (see logic/streaks.js) -- the same
+// `current` count StatsView.vue's "Day streak" tile shows. Recomputed off the
+// round-over flag because useGame() writes the finished result into
+// logic/history.js *before* flipping roundOver true, so the moment this
+// re-evaluates, history already includes the round the player just finished.
+// Reassigning `game` on a puzzle change re-tracks the new game's flag too, so
+// archive-hopping keeps this honest. The pill itself only mounts when this is
+// >= 1 (see the template), so a lapsed/absent streak shows nothing at all.
+const currentStreak = computed(() => {
+  void game.value.roundOver;
+  return computeStreaks(Object.keys(getHistory()).map(Number), getTodayPuzzleNumber()).current;
+});
+
 const shareText = computed(() =>
   buildShareText({
     pegsRemaining: game.value.pegsRemaining,
@@ -297,6 +313,13 @@ onBeforeUnmount(() => {
            scrolls the page (the result screen is condensed enough to fit
            above the fold on its own). -->
       <div class="result-anchor">
+        <!-- The player's current daily streak, pinned to the top-right of the
+             result card and linking to the stats page (see
+             ResultStreakPill.vue). Only present once the result screen is up
+             and the streak is a real, unbroken run -- absolutely positioned so
+             it never nudges the centered date/rank/board group below it. -->
+        <ResultStreakPill v-if="showResult && currentStreak > 0" class="streak-corner" :streak="currentStreak" />
+
         <p v-if="formattedDate" class="puzzle-line">{{ formattedDate }}</p>
 
         <div class="result-group" :class="{ 'with-divider': showResult }">
@@ -435,11 +458,42 @@ onBeforeUnmount(() => {
 /* Wraps .puzzle-line (the date) and .result-group together -- purely a
    layout grouping now (see the template comment above). */
 .result-anchor {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 14px;
   width: 100%;
+}
+
+/* Pins the streak pill to the top-right corner of the result group without
+   taking part in the centered column flow above -- so the date, rank, board,
+   and ladder stay perfectly centered no matter how wide the pill gets. A
+   one-shot fade/scale entrance keeps it from popping in hard the instant the
+   result screen takes over. */
+.streak-corner {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 2;
+  animation: streak-corner-enter 0.35s ease-out;
+}
+
+@keyframes streak-corner-enter {
+  0% {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.9);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .streak-corner {
+    animation: none;
+  }
 }
 
 .puzzle-line {

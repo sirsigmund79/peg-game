@@ -35,6 +35,7 @@ export const EVENTS = {
   ARCHIVE_TEASER_EXPLORE_CLICKED: 'archive_teaser_explore_clicked',
   STATS_NAV_CLICKED: 'stats_nav_clicked',
   STATS_ARCHIVE_CTA_CLICKED: 'stats_archive_cta_clicked',
+  RESULT_STREAK_CLICKED: 'result_streak_clicked',
   BADGE_UNLOCKED: 'badge_unlocked',
   GHOST_OUTLINE_BASELINE_CAPTURED: 'ghost_outline_baseline_captured',
   HOW_TO_PLAY_SHOWN: 'how_to_play_shown',
