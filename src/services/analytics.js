@@ -38,6 +38,7 @@ export const EVENTS = {
   BADGE_UNLOCKED: 'badge_unlocked',
   GHOST_OUTLINE_BASELINE_CAPTURED: 'ghost_outline_baseline_captured',
   HOW_TO_PLAY_SHOWN: 'how_to_play_shown',
+  HOW_TO_PLAY_STEP_VIEWED: 'how_to_play_step_viewed',
   HOW_TO_PLAY_DISMISSED: 'how_to_play_dismissed',
 };
 

@@ -13,7 +13,7 @@
   ============================================================================
 -->
 <script setup>
-import { computed, onMounted, watch } from 'vue';
+import { computed, watch } from 'vue';
 import { useTheme } from './composables/useTheme.js';
 import { useRouter } from './composables/useRouter.js';
 import { useHowToPlay } from './composables/useHowToPlay.js';
@@ -26,11 +26,9 @@ import HowToPlayModal from './components/HowToPlayModal.vue';
 
 useTheme(); // applies the Moose theme's CSS variables to the page -- see composables/useTheme.js
 
-// Opens itself once, the very first time this browser ever loads the game
-// (see useHowToPlay.js's openIfFirstVisit()) -- after that, same as before,
-// a player only sees it again if they tap the header "?" button themselves.
+// The How to Play walkthrough is only ever opened on purpose now -- via the
+// header's "?" button (see useHowToPlay.js) -- never auto-shown on first visit.
 const howToPlay = useHowToPlay();
-onMounted(() => howToPlay.openIfFirstVisit());
 
 // Vite sets import.meta.env.DEV to true for `npm run dev` and false for a
 // production `npm run build` -- reading it into a plain variable here
@@ -154,7 +152,7 @@ function handleArchiveNavClick(event) {
       <DevToolsView v-else-if="page === 'dev'" />
     </main>
 
-    <HowToPlayModal v-if="howToPlay.state.visible" @close="(source) => howToPlay.close(source)" />
+    <HowToPlayModal v-if="howToPlay.state.visible" @close="(source, step) => howToPlay.close(source, step)" />
   </div>
 </template>
 
