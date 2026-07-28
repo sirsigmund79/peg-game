@@ -189,11 +189,6 @@ function dotsToGo(tier) {
       <span class="rung-name">{{ tier.rank }}</span>
       <span class="rung-meta">
         <span v-if="state.status === 'current' && newBestAchieved" class="new-best-pill">New best!</span>
-        <!-- The rank actually achieved this round: 0 dots to go by definition,
-             so instead of the (blank) "N dots to go" every higher rung shows,
-             it gets a plain "You're here" -- keeps every ladder row labelled
-             rather than leaving the achieved rung's right side empty. -->
-        <span v-else-if="state.status === 'current'" class="you-are-here">You’re here</span>
         <span v-else-if="state.status === 'unearned' && dotsToGo(tier) > 0" class="to-go">
           {{ dotsToGo(tier) }} dot{{ dotsToGo(tier) === 1 ? '' : 's' }} to go
         </span>
@@ -330,22 +325,6 @@ function dotsToGo(tier) {
   font-weight: 700;
   font-size: 0.68rem;
   color: var(--color-ink-dim);
-}
-
-/* The achieved rung's "You're here" -- sits on the loud .current fill, so it
-   takes the same contrasting text color the current rung's name uses (white
-   on the green rung, dark ink on Genius's gold; see the .current rules
-   below), just dimmed a touch so it stays quieter than the rank name itself. */
-.you-are-here {
-  font-family: var(--font-ui);
-  font-weight: 700;
-  font-size: 0.68rem;
-  color: var(--color-header-text);
-  opacity: 0.85;
-}
-
-.rung.genius.current .you-are-here {
-  color: var(--color-ink);
 }
 
 /* Earned on a previous playthrough (or passed during this round's climb) --
