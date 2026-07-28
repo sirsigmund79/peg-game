@@ -234,31 +234,31 @@ export const RANK_TIERS = [
     minCompletion: 0,
     rank: 'Warming Up',
     emoji: '',
-    quips: ['Everybody starts somewhere.', 'The board says hi.', 'Plenty of pegs to keep you company.'],
+    quips: ['Everybody starts somewhere.', 'Enough dots for a pointillist painting', 'Plenty of dots to keep you company.'],
   },
   {
     minCompletion: 50,
     rank: 'Movin’ Up',
     emoji: '',
-    quips: ['Progress! Sorta.', 'The pegs are winning, but barely.', 'Rome wasn’t cleared in a day.'],
+    quips: ['Progress! Sorta.', 'The dots are winning, but barely.', 'Rome wasn’t cleared in a day.'],
   },
   {
     minCompletion: 70,
     rank: 'Not bad',
     emoji: '',
-    quips: ['Cracker Barrel would nod.', 'Middle of the pack, and proud.', 'You’ve done worse. Probably.'],
+    quips: ['A respectable score', 'Middle of the pack, and proud.', 'You’ve done worse. Probably.'],
   },
   {
     minCompletion: 85,
     rank: 'Purty smart',
     emoji: '',
-    quips: ['So close you can taste it.', 'Par’s right there, sugar.', 'One good jump from glory.'],
+    quips: ['So close you can taste it.', 'Genius is right there 👀', 'One good jump from glory.'],
   },
   {
     minCompletion: 100,
     rank: 'Genius',
     emoji: '🧠',
-    quips: ['Par cleared. Show-off.', 'Nothing left to prove.', 'The board never stood a chance.'],
+    quips: ['The best! What a show-off.', 'Nothing left to prove.', 'The board never stood a chance.'],
   },
 ];
 
