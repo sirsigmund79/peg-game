@@ -68,7 +68,7 @@ function confirmWatch() {
   <div class="watch-solution">
     <!-- 1. prompt: a single quiet link, minimal footprint. -->
     <button v-if="mode === 'prompt'" type="button" class="watch-link" @click="openConfirm">
-      <span class="watch-eye" aria-hidden="true">👁</span> Watch the solution
+      <span class="watch-eye" aria-hidden="true">👀</span> Watch the solution
     </button>
 
     <!-- 2. confirm: the trade-off, stated once, plainly, before committing. -->
