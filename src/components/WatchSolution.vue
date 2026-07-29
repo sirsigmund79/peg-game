@@ -74,7 +74,7 @@ function confirmWatch() {
     <!-- 2. confirm: the trade-off, stated once, plainly, before committing. -->
     <div v-else-if="mode === 'confirm'" class="watch-confirm" role="group" aria-label="Watch the solution">
       <p class="watch-confirm-text">
-        Heads up — watching the solution <strong>locks in your rank</strong> for this puzzle. You won't be able to reset and play it again.
+        Heads up: watching the solution <strong>locks in your rank</strong> for this puzzle. You won't be able to reset and play it again.
       </p>
       <div class="watch-confirm-actions">
         <button type="button" class="watch-confirm-yes" @click="confirmWatch">Watch &amp; lock rank</button>
