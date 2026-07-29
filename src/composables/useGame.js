@@ -32,6 +32,7 @@ import { playRoundOverChime } from '../fx/sound.js';
 import { recordResult, getResultForPuzzle } from '../logic/history.js';
 import { getBestForPuzzle, recordBestIfBetter } from '../logic/bestResults.js';
 import { getFinishedMasks, recordRoundFinished, clearRoundFinished } from '../logic/roundState.js';
+import { isSolutionLocked, lockSolution as persistSolutionLock } from '../logic/solutionLock.js';
 import { recordPegCleared, recordPlaythroughEnded, recordGiveUpReset, recordGeniusReached, getAttemptsForPuzzle } from '../logic/badgeStats.js';
 import { isGiveUpReset } from '../logic/attemptBoundary.js';
 import { checkForNewlyUnlockedBadges } from '../logic/badgeUnlocks.js';
@@ -48,13 +49,19 @@ function sum(numbers) {
  *
  * @param {{geometry: object, holeColors: number[], colorCount: number, par: number[], cellCount: number}} puzzle
  *   a puzzle definition, e.g. from logic/daily.js's getTodaysPuzzle()
- * @param {{source?: 'daily'|'link'|'custom'}} [options] - where this round was launched from, for analytics only (see services/analytics.js)
+ * @param {{source?: 'daily'|'link'|'custom', ephemeral?: boolean}} [options]
+ *   - `source`: where this round was launched from, for analytics only (see services/analytics.js)
+ *   - `ephemeral`: a throwaway board that must leave no trace -- records no
+ *     history/best/round-state/badges and fires no analytics. Used by
+ *     components/SolutionReplay.vue to demonstrate the solve without it ever
+ *     looking like the player played (or re-played) the puzzle.
  * @returns the reactive game state and the functions to play it
  */
 export function useGame(puzzle, options = {}) {
   const geometry = puzzle.geometry;
   const startingMasks = createStartingMasks(puzzle.cellCount, puzzle.holeColors, puzzle.colorCount);
   const source = options.source ?? 'daily';
+  const ephemeral = options.ephemeral ?? false;
   const { ghost } = useGhostOutline();
 
   // The percentage denominator every rank on this puzzle is measured against
@@ -142,17 +149,27 @@ export function useGame(puzzle, options = {}) {
     // from storage so a restored, already-finished round shows the right
     // number; bumped in jump()/reset() as new attempts end.
     tries: puzzle.puzzleNumber != null ? getAttemptsForPuzzle(puzzle.puzzleNumber) : 0,
+    // True once the player has watched this puzzle's solution and thereby
+    // locked in their rank (see logic/solutionLock.js and
+    // components/WatchSolution.vue). Seeded from storage so a locked puzzle
+    // stays locked across reloads; while set, reset() refuses to run, so the
+    // player can no longer replay for a better result.
+    solutionLocked: puzzle.puzzleNumber != null ? isSolutionLocked(puzzle.puzzleNumber) : false,
   });
 
-  track(EVENTS.PUZZLE_STARTED, {
-    puzzle_number: puzzle.puzzleNumber ?? null,
-    puzzle_date: puzzle.date ?? null,
-    board_shape: puzzle.boardId ?? null,
-    color_count: puzzle.colorCount,
-    par_total: sum(puzzle.par),
-    source,
-    already_played: puzzle.puzzleNumber !== null && puzzle.puzzleNumber !== undefined && Boolean(getResultForPuzzle(puzzle.puzzleNumber)),
-  });
+  // Skipped for an ephemeral demo board (see the options doc above) -- a
+  // solve replay must never look like the player started the puzzle.
+  if (!ephemeral) {
+    track(EVENTS.PUZZLE_STARTED, {
+      puzzle_number: puzzle.puzzleNumber ?? null,
+      puzzle_date: puzzle.date ?? null,
+      board_shape: puzzle.boardId ?? null,
+      color_count: puzzle.colorCount,
+      par_total: sum(puzzle.par),
+      source,
+      already_played: puzzle.puzzleNumber !== null && puzzle.puzzleNumber !== undefined && Boolean(getResultForPuzzle(puzzle.puzzleNumber)),
+    });
+  }
 
   const pegsRemaining = computed(() => countPegsRemaining(state.masks));
 
@@ -367,24 +384,27 @@ export function useGame(puzzle, options = {}) {
         }
         checkForNewlyUnlockedBadges(puzzle.puzzleNumber);
       }
-      track(EVENTS.PUZZLE_COMPLETED, {
-        puzzle_number: puzzle.puzzleNumber ?? null,
-        puzzle_date: puzzle.date ?? null,
-        board_shape: puzzle.boardId ?? null,
-        color_count: puzzle.colorCount,
-        won,
-        rank: getRankForOverPar(overParAtEnd, removable).rank,
-        over_par: overParAtEnd,
-        completion_percent: Math.round(getCompletionPercent(overParAtEnd, removable)),
-        move_count: state.moveCount,
-        undo_count: state.undoCount,
-        reset_count: state.resetCount,
-        duration_ms: Date.now() - state.roundStartedAt,
-        source,
-        repeat_move_count: state.repeatMoveCount,
-        cumulative_move_count: state.cumulativeMoveCount,
-        ghost_outline_used: state.ghostOutlineUsedThisPuzzle,
-      });
+      // Skipped for an ephemeral demo board -- see PUZZLE_STARTED above.
+      if (!ephemeral) {
+        track(EVENTS.PUZZLE_COMPLETED, {
+          puzzle_number: puzzle.puzzleNumber ?? null,
+          puzzle_date: puzzle.date ?? null,
+          board_shape: puzzle.boardId ?? null,
+          color_count: puzzle.colorCount,
+          won,
+          rank: getRankForOverPar(overParAtEnd, removable).rank,
+          over_par: overParAtEnd,
+          completion_percent: Math.round(getCompletionPercent(overParAtEnd, removable)),
+          move_count: state.moveCount,
+          undo_count: state.undoCount,
+          reset_count: state.resetCount,
+          duration_ms: Date.now() - state.roundStartedAt,
+          source,
+          repeat_move_count: state.repeatMoveCount,
+          cumulative_move_count: state.cumulativeMoveCount,
+          ghost_outline_used: state.ghostOutlineUsedThisPuzzle,
+        });
+      }
     }
   }
 
@@ -400,8 +420,27 @@ export function useGame(puzzle, options = {}) {
     state.lastMove = null;
   }
 
+  /**
+   * Locks this puzzle's rank in because the player chose to watch the
+   * solution (see components/WatchSolution.vue). Once locked, reset() refuses
+   * to run, so there's no replaying for a better result. Persisted so the
+   * lock survives a reload. Idempotent, and a no-op for a custom design
+   * (puzzleNumber === null), which has no rank to protect.
+   */
+  function lockSolution() {
+    if (state.solutionLocked) return;
+    state.solutionLocked = true;
+    if (puzzle.puzzleNumber != null) persistSolutionLock(puzzle.puzzleNumber);
+  }
+
   /** Resets the board back to the puzzle's starting position. */
   function reset() {
+    // Once the player has watched the solution, their rank is locked in --
+    // replaying is exactly what that trade-off gives up, so Reset becomes a
+    // no-op (the UI also hides the button; this is the backstop). See
+    // logic/solutionLock.js and components/WatchSolution.vue.
+    if (state.solutionLocked) return;
+
     // Read BEFORE anything below mutates state -- this is the one signal
     // that tells apart the two Reset entry points in the UI (see
     // logic/attemptBoundary.js): Controls' Reset (round still live -- a
@@ -489,11 +528,17 @@ export function useGame(puzzle, options = {}) {
     restoredFinished: restoredMasks !== undefined,
     previousBest: computed(() => state.previousBest),
     justAchievedNewBest: computed(() => state.justAchievedNewBest),
+    // Whether the player has watched this puzzle's solution and locked in
+    // their rank -- components/PlayView.vue reads this to hide Reset, and
+    // components/WatchSolution.vue to know it's already been done. See
+    // lockSolution() and logic/solutionLock.js.
+    solutionLocked: computed(() => state.solutionLocked),
     holeHasPeg,
     getHoleColor,
     selectHole,
     deselect,
     undo,
     reset,
+    lockSolution,
   });
 }
