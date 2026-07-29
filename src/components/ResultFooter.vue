@@ -28,6 +28,11 @@ const props = defineProps({
   rank: { type: String, required: true },
   won: { type: Boolean, required: true },
   overPar: { type: Number, required: true },
+  // Whether replaying is still allowed. Goes false once the player has
+  // watched the solution and locked their rank (see
+  // components/WatchSolution.vue) -- Reset is then dropped entirely, leaving
+  // Share to take the full row.
+  allowReset: { type: Boolean, default: true },
 });
 
 defineEmits(['reset']);
@@ -51,7 +56,7 @@ async function handleShareClick() {
   <footer class="result-footer">
     <div class="result-actions">
       <button type="button" class="share-button" @click="handleShareClick">Share With A Friend 💬</button>
-      <button type="button" class="reset-button" @click="$emit('reset')">Reset</button>
+      <button v-if="allowReset" type="button" class="reset-button" @click="$emit('reset')">Reset</button>
     </div>
     <p v-if="shareStatusMessage" class="share-status" role="status">{{ shareStatusMessage }}</p>
   </footer>

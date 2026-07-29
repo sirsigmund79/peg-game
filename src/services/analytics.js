@@ -30,6 +30,12 @@ export const EVENTS = {
   PUZZLE_LEFT_INCOMPLETE: 'puzzle_left_incomplete',
   SHARE_CLICKED: 'share_clicked',
   SHARE_COPY_RESULT: 'share_copy_result',
+  // The "watch the solution" trade-off (see components/WatchSolution.vue):
+  // _PROMPTED when the confirm/trade-off step is opened, _RANK_LOCKED when
+  // the player commits (locking their rank), _REPLAYED on each manual replay.
+  SOLUTION_WATCH_PROMPTED: 'solution_watch_prompted',
+  SOLUTION_RANK_LOCKED: 'solution_rank_locked',
+  SOLUTION_REPLAYED: 'solution_replayed',
   ARCHIVE_PUZZLE_SELECTED: 'archive_puzzle_selected',
   ARCHIVE_TEASER_DAY_SELECTED: 'archive_teaser_day_selected',
   ARCHIVE_TEASER_EXPLORE_CLICKED: 'archive_teaser_explore_clicked',

@@ -60,6 +60,7 @@ import ResultStreakPill from './ResultStreakPill.vue';
 import DotsLeftOnBoard from './DotsLeftOnBoard.vue';
 import RankLadder from './RankLadder.vue';
 import ResultFooter from './ResultFooter.vue';
+import WatchSolution from './WatchSolution.vue';
 import ArchiveDayStrip from './ArchiveDayStrip.vue';
 import NextPuzzleCountdown from './NextPuzzleCountdown.vue';
 import TemporaryWatchSolveButton from './TemporaryWatchSolveButton.vue';
@@ -383,8 +384,17 @@ onBeforeUnmount(() => {
               :rank="game.rank.rank"
               :won="game.hasWon"
               :over-par="game.overPar"
+              :allow-reset="!game.solutionLocked"
               @reset="game.reset()"
             />
+
+            <!-- The "watch the solution" offer (see WatchSolution.vue): a
+                 quiet link by default, expanding into the trade-off warning
+                 and then a replayable solve below the ladder. Only for real
+                 daily/archive puzzles -- a custom design has no ranked result
+                 to lock. Keyed by puzzle so navigating between puzzles gets a
+                 fresh offer/lock state rather than a reused one. -->
+            <WatchSolution v-if="puzzle.puzzleNumber != null" :key="puzzle.puzzleNumber" :puzzle="puzzle" :game="game" />
           </div>
         </div>
       </div>
