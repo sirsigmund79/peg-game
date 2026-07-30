@@ -70,6 +70,7 @@ dev-vs-production split `app_env` already covers.
 | `stats_nav_clicked` | Header's Stats icon tapped (`App.vue`) | — |
 | `stats_archive_cta_clicked` | "Check out the Archive" tapped on the stats page (`StatsView.vue`) | — |
 | `badge_unlocked` | A badge's unlock condition (see `logic/badges.js`) is newly satisfied | `badge_id`, `puzzle_number` |
+| `badge_card_clicked` | The unlock card on the result screen is tapped through to the badge shelf (`BadgeUnlockCard.vue`) | `badge_id` |
 | `ghost_outline_baseline_captured` | Once per browser, on the first app boot after this instrumentation ships (`initAnalytics()`) | `baseline_genius_rate`, `baseline_lifetime_puzzles_completed`, `baseline_current_streak_days` |
 | `how_to_play_shown` | The How to Play walkthrough opens — only ever via the header's "?" button now (no longer auto-shown on first visit) (`useHowToPlay.js`) | `source` (`manual`) |
 | `how_to_play_step_viewed` | A walkthrough slide becomes visible (fires on open and on every Next/Back/dot navigation) (`HowToPlayModal.vue`) | `step` (1-indexed), `stepCount` |

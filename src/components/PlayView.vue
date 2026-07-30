@@ -48,6 +48,7 @@ import { useResultReveal } from '../composables/useResultReveal.js';
 import { useRouter } from '../composables/useRouter.js';
 import { pendingCustomPuzzle } from '../composables/usePendingPuzzle.js';
 import { buildShareText } from '../services/viral.js';
+import { vibrateBadgeUnlock } from '../fx/haptics.js';
 import { EVENTS, track } from '../services/analytics.js';
 import { useGhostOutline } from '../composables/useGhostOutline.js';
 import { useDevPanels } from '../composables/useDevPanels.js';
@@ -59,6 +60,8 @@ import ResultHeader from './ResultHeader.vue';
 import ResultStreakPill from './ResultStreakPill.vue';
 import DotsLeftOnBoard from './DotsLeftOnBoard.vue';
 import RankLadder from './RankLadder.vue';
+import BadgeUnlockCard from './BadgeUnlockCard.vue';
+import BadgeUnlockPreview from './BadgeUnlockPreview.vue';
 import ResultFooter from './ResultFooter.vue';
 import WatchSolution from './WatchSolution.vue';
 import ArchiveDayStrip from './ArchiveDayStrip.vue';
@@ -165,6 +168,25 @@ const showResult = ref(false);
 // under the still-playing reveal.
 const showArchiveStrip = ref(false);
 const reveal = useResultReveal();
+// Badges earned by the round that just ended (see useGame.js's
+// `pendingBadgeUnlocks`), held here for the life of THIS result screen.
+// Filled by draining the game's queue once the ladder is up -- see the
+// `ladderReady` watcher below -- and emptied whenever the result screen goes
+// away, so a "play again" Reset doesn't take the celebration with it into the
+// next round.
+const shownBadgeUnlocks = ref([]);
+// Dev-only (see BadgeUnlockPreview.vue): badge cards fired onto the result
+// screen by hand. Kept in their own list, never merged into the queue above,
+// so a preview can't be confused with something actually earned -- and each
+// entry carries its own key so re-previewing the same badge mounts a fresh
+// card and replays the entrance rather than being deduped away.
+const previewBadgeUnlocks = ref([]);
+let previewSequence = 0;
+
+function previewBadgeUnlock(badge) {
+  previewSequence += 1;
+  previewBadgeUnlocks.value = [...previewBadgeUnlocks.value, { ...badge, previewKey: `preview-${previewSequence}` }];
+}
 // Template refs to the two components composables/useResultReveal.js's fly
 // sequence needs real on-screen positions from -- see activateResult()
 // below, which hands their exposed getRootRect()/getSlotRect() straight
@@ -235,6 +257,8 @@ watch(
       reveal.cancel();
       showResult.value = false;
       showArchiveStrip.value = false;
+      shownBadgeUnlocks.value = [];
+    previewBadgeUnlocks.value = [];
       return;
     }
     if (prefersReducedMotion) {
@@ -245,6 +269,22 @@ watch(
       activateResult();
       resultHoldTimeoutId = null;
     }, RESULT_HOLD_MS);
+  }
+);
+
+// Any badge earned by this round shows up once the ladder has finished
+// climbing -- the last beat of the reveal, so the celebration lands after the
+// rank rather than on top of it. Draining useGame's queue (rather than
+// reading it) is what keeps a badge to exactly one appearance: a restored
+// round, or a replay of a puzzle whose badge already popped, finds it empty.
+watch(
+  () => reveal.ladderReady,
+  (isReady) => {
+    if (!isReady) return;
+    shownBadgeUnlocks.value = game.value.takeBadgeUnlocks();
+    // One flourish for the batch, not one per card -- the cards stagger in
+    // over the next second or so and a buzz each would just read as noise.
+    if (shownBadgeUnlocks.value.length > 0) vibrateBadgeUnlock();
   }
 );
 
@@ -259,6 +299,8 @@ watch(
     reveal.cancel();
     showResult.value = false;
     showArchiveStrip.value = false;
+    shownBadgeUnlocks.value = [];
+    previewBadgeUnlocks.value = [];
     puzzle.value = resolvePuzzle();
     game.value = useGame(puzzle.value, { source: resolveSource() });
     applyRestoredResultIfAny();
@@ -374,6 +416,24 @@ onBeforeUnmount(() => {
                throughout (see its `compact` prop) and must never itself
                flicker opacity:0 as part of this. -->
           <div v-if="showResult" class="result-extras">
+            <!-- Anything the player just earned (see BadgeUnlockCard.vue).
+                 Almost always empty -- badges cost the result screen nothing
+                 on a normal finish, which is the point. Gated on ladderReady
+                 so it arrives after the rank has finished climbing, not
+                 alongside it. -->
+            <BadgeUnlockCard
+              v-for="(badge, badgeIndex) in shownBadgeUnlocks"
+              :key="badge.id"
+              :badge="badge"
+              :index="badgeIndex"
+            />
+
+            <!-- Dev-only previews, rendered in the same slot as the real
+                 thing above so what's being previewed is genuinely what
+                 ships. Always index 0 -- these mount one at a time, so a
+                 batch stagger would just delay each click's feedback. -->
+            <BadgeUnlockCard v-for="badge in previewBadgeUnlocks" :key="badge.previewKey" :badge="badge" />
+
             <!-- How many attempts this puzzle has taken (see useGame.js's
                  `tries`) -- the same count that rides along in the share text.
                  Omitted for custom designs, which record no attempts. -->
@@ -401,6 +461,18 @@ onBeforeUnmount(() => {
 
       <template v-if="isDevBuild">
         <DevPanelToggles />
+        <!-- Kept directly under the toggles row rather than at the bottom of
+             this block: it fires cards into the result card just above, and
+             the analysis panels below are tall enough that anywhere lower
+             means clicking a chip and then scrolling back up to see what it
+             did. Only while the result screen is actually up -- there's
+             nothing to aim at mid-round. -->
+        <BadgeUnlockPreview
+          v-if="devPanels.badgePreview && showResult"
+          :count="previewBadgeUnlocks.length"
+          @preview="previewBadgeUnlock"
+          @clear="previewBadgeUnlocks = []"
+        />
         <div class="dev-search-tools">
           <SearchTreeVisualizer v-if="devPanels.searchTree" :geometry="game.geometry" :masks="game.state.masks" :par="game.par" />
           <PuzzleDifficultyProfile v-if="devPanels.difficulty" :geometry="game.geometry" :masks="game.state.masks" :par="game.par" />

@@ -42,7 +42,11 @@ export const EVENTS = {
   STATS_NAV_CLICKED: 'stats_nav_clicked',
   STATS_ARCHIVE_CTA_CLICKED: 'stats_archive_cta_clicked',
   RESULT_STREAK_CLICKED: 'result_streak_clicked',
+  // _UNLOCKED fires the moment a badge's condition is met (see
+  // logic/badgeUnlocks.js); _CARD_CLICKED when the player taps the unlock
+  // card on the result screen through to their badge shelf.
   BADGE_UNLOCKED: 'badge_unlocked',
+  BADGE_CARD_CLICKED: 'badge_card_clicked',
   GHOST_OUTLINE_BASELINE_CAPTURED: 'ghost_outline_baseline_captured',
   HOW_TO_PLAY_SHOWN: 'how_to_play_shown',
   HOW_TO_PLAY_STEP_VIEWED: 'how_to_play_step_viewed',

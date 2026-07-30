@@ -50,6 +50,7 @@ import { RANK_TIERS, getRankForOverPar, removablePegCount } from '../logic/rules
 import { useRouter } from '../composables/useRouter.js';
 import { useGhostOutline } from '../composables/useGhostOutline.js';
 import { EVENTS, track } from '../services/analytics.js';
+import BadgeShelf from './BadgeShelf.vue';
 
 const { navigate } = useRouter();
 const { ghost, discover } = useGhostOutline();
@@ -117,6 +118,12 @@ const maxRankCount = Math.max(1, ...rankBars.map((bar) => bar.count));
         <span class="rank-count">{{ bar.count }}</span>
       </div>
     </div>
+
+    <!-- Everything earned so far, plus anonymous slots for what hasn't been
+         -- see BadgeShelf.vue. Sits below the rank breakdown (which is about
+         one puzzle at a time) and above the archive CTA, so the page reads
+         "how you play" -> "what that's won you" -> "go play more". -->
+    <BadgeShelf />
 
     <div class="archive-section">
       <h2 class="archive-heading">Want to get your numbers up?</h2>

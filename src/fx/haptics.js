@@ -29,6 +29,18 @@ export function vibrateRoundOver() {
   }
 }
 
+/**
+ * A rising three-tap flourish for a badge unlocking (see
+ * components/BadgeUnlockCard.vue). Deliberately longer and more punctuated
+ * than vibrateRoundOver()'s pattern, which has already played by the time
+ * this fires -- a badge is rarer than finishing a round, and should feel it.
+ */
+export function vibrateBadgeUnlock() {
+  if (canVibrate()) {
+    navigator.vibrate([18, 60, 26, 60, 45]);
+  }
+}
+
 /** A short double-tap "nope" buzz -- distinct from vibrateJump()'s single buzz -- for a tap that tried to jump into an illegal hole (see useGame.js's `state.invalidAttempt`). */
 export function vibrateInvalid() {
   if (canVibrate()) {

@@ -3,8 +3,9 @@
 // ----------------------------------------------------------------------------
 // Dev-only (see App.vue's `isDevBuild` gate -- this never ships to real
 // players): which of PlayView.vue's dev panels (the search-tree visualizer,
-// the difficulty profile, the breadth/depth thumbnails) and the temporary
-// Watch Solve button are currently shown. All default to on, matching this
+// the difficulty profile, the breadth/depth thumbnails, the badge-unlock
+// previewer) and the temporary Watch Solve button are currently shown. All
+// default to on, matching this
 // page's behavior before this toggle menu existed, so a fresh dev checkout
 // looks exactly the same until someone actually turns something off.
 //
@@ -25,12 +26,13 @@ const DEFAULTS = {
   difficulty: true,
   breadthDepth: true,
   watchSolve: true,
+  badgePreview: true,
 };
 
 const devPanels = reactive({ ...DEFAULTS, ...safeGet(STORAGE_KEY, {}) });
 
 /**
- * @returns {{devPanels: {searchTree: boolean, difficulty: boolean, breadthDepth: boolean, watchSolve: boolean}, togglePanel: (key: string) => void}}
+ * @returns {{devPanels: {searchTree: boolean, difficulty: boolean, breadthDepth: boolean, watchSolve: boolean, badgePreview: boolean}, togglePanel: (key: string) => void}}
  */
 export function useDevPanels() {
   /** Flips one panel's visibility and persists the whole set. */

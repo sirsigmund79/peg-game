@@ -33,7 +33,16 @@ import { recordResult, getResultForPuzzle } from '../logic/history.js';
 import { getBestForPuzzle, recordBestIfBetter } from '../logic/bestResults.js';
 import { getFinishedMasks, recordRoundFinished, clearRoundFinished } from '../logic/roundState.js';
 import { isSolutionLocked, lockSolution as persistSolutionLock } from '../logic/solutionLock.js';
-import { recordPegCleared, recordPlaythroughEnded, recordGiveUpReset, recordGeniusReached, getAttemptsForPuzzle } from '../logic/badgeStats.js';
+import {
+  recordPegCleared,
+  recordPlaythroughEnded,
+  recordGiveUpReset,
+  recordGeniusReached,
+  recordUndo,
+  recordResetPressed,
+  recordRankReached,
+  getAttemptsForPuzzle,
+} from '../logic/badgeStats.js';
 import { isGiveUpReset } from '../logic/attemptBoundary.js';
 import { checkForNewlyUnlockedBadges } from '../logic/badgeUnlocks.js';
 import { encodeMasks, moveKey, getSeenMoveKeys, recordMoveSeen } from '../logic/ghostMoves.js';
@@ -115,12 +124,15 @@ export function useGame(puzzle, options = {}) {
     roundStartedAt: Date.now(),
     firstMoveTracked: false,
     incompleteReported: false,
-    // Badge-stat bookkeeping only (see logic/badgeStats.js's Clean Genius
-    // check) -- Undo count for the CURRENT attempt specifically. Unlike
-    // undoCount above (which analytics never resets across a reset() within
-    // one session -- see the note in reset() below), this one always starts
-    // back at 0 for a fresh attempt.
-    attemptUndoCount: 0,
+    // Badges unlocked but not yet shown to the player (see
+    // logic/badgeUnlocks.js for the shape). Both attempt-ending paths below
+    // push here; components/PlayView.vue drains it via takeBadgeUnlocks()
+    // once the result reveal finishes. A queue rather than a direct hand-off
+    // because a badge can also be unlocked by a Reset -- and popping a
+    // celebration over a board the player just walked away from is the wrong
+    // moment, so it waits for the next result screen instead. Deliberately
+    // NOT cleared by reset() for exactly that reason.
+    pendingBadgeUnlocks: [],
     // The best-ever result recorded for this puzzle before the attempt
     // whose result is CURRENTLY showing -- frozen for that attempt's whole
     // result screen (see reset() below, which refreshes it from
@@ -374,15 +386,20 @@ export function useGame(puzzle, options = {}) {
         }
 
         // Reaching a terminal state always ends the current attempt -- see
-        // logic/attemptBoundary.js for how this differs from Reset. Refresh
-        // the Tries count straight from the counter this just bumped, so the
-        // result screen (and its quip) reflect the attempt that just ended.
+        // logic/attemptBoundary.js for how this differs from Reset. Read the
+        // count BEFORE bumping it: One and Done needs "attempts before this
+        // one", and recordPlaythroughEnded is about to make that impossible
+        // to tell apart from "attempts including this one".
+        const priorAttempts = getAttemptsForPuzzle(puzzle.puzzleNumber);
         recordPlaythroughEnded(puzzle.puzzleNumber);
+        // Refresh the Tries count straight from the counter just bumped, so
+        // the result screen (and its quip) reflect the attempt that ended.
         state.tries = getAttemptsForPuzzle(puzzle.puzzleNumber);
+        recordRankReached(getRankTierIndex(overParAtEnd, removable));
         if (getRankForOverPar(overParAtEnd, removable).rank === 'Genius') {
-          recordGeniusReached(puzzle.puzzleNumber, { attemptUndoCount: state.attemptUndoCount });
+          recordGeniusReached(puzzle.puzzleNumber, { priorAttempts });
         }
-        checkForNewlyUnlockedBadges(puzzle.puzzleNumber);
+        state.pendingBadgeUnlocks.push(...checkForNewlyUnlockedBadges(puzzle.puzzleNumber));
       }
       // Skipped for an ephemeral demo board -- see PUZZLE_STARTED above.
       if (!ephemeral) {
@@ -413,7 +430,10 @@ export function useGame(puzzle, options = {}) {
     if (state.undoStack.length === 0) return;
     track(EVENTS.PUZZLE_UNDO_USED, { puzzle_number: puzzle.puzzleNumber ?? null, move_count_before_undo: state.moveCount });
     state.undoCount += 1;
-    state.attemptUndoCount += 1;
+    // Persisted per puzzle (see logic/badgeStats.js) rather than counted in
+    // memory, so One and Done can still see an Undo taken on an earlier
+    // attempt -- or in an earlier visit entirely.
+    if (puzzle.puzzleNumber !== null) recordUndo(puzzle.puzzleNumber);
     state.masks = state.undoStack.pop();
     state.moveCount = Math.max(0, state.moveCount - 1);
     state.selectedHole = null;
@@ -459,6 +479,10 @@ export function useGame(puzzle, options = {}) {
         ghost_outline_used: state.ghostOutlineUsedThisPuzzle,
       });
       state.resetCount += 1;
+      // Push to Reset counts the BUTTON, so both entry points feed it --
+      // unlike recordGiveUpReset below. Sharing the `moveCount > 0` gate
+      // keeps stray taps on an untouched board out of it, same as the event.
+      if (puzzle.puzzleNumber !== null) recordResetPressed();
     }
 
     // A give-up Reset ends the current attempt -- a "play again" Reset
@@ -470,7 +494,14 @@ export function useGame(puzzle, options = {}) {
       // That give-up counts as an attempt too -- keep Tries in step for the
       // next round's result screen.
       state.tries = getAttemptsForPuzzle(puzzle.puzzleNumber);
-      checkForNewlyUnlockedBadges(puzzle.puzzleNumber);
+    }
+
+    // Outside the give-up branch above on purpose: recordResetPressed fires
+    // on either kind of Reset, so Push to Reset has to be checkable after
+    // either kind too. Queued rather than shown now -- see
+    // `pendingBadgeUnlocks`.
+    if (puzzle.puzzleNumber !== null && state.moveCount > 0) {
+      state.pendingBadgeUnlocks.push(...checkForNewlyUnlockedBadges(puzzle.puzzleNumber));
     }
 
     // Explicit reset is the one signal that the next time this puzzle
@@ -485,7 +516,6 @@ export function useGame(puzzle, options = {}) {
     state.lastMove = null;
     state.undoStack = [];
     state.moveCount = 0;
-    state.attemptUndoCount = 0;
     state.roundStartedAt = Date.now();
     state.justAchievedNewBest = false;
     // Roll the just-finished attempt's result (if it raised the bar) into
@@ -493,6 +523,19 @@ export function useGame(puzzle, options = {}) {
     // against -- see the state fields' own comments above for why this
     // can't just happen the instant that attempt finished.
     state.previousBest = state.sessionBest;
+  }
+
+  /**
+   * Hands over every badge unlocked since the last call and empties the
+   * queue -- see `pendingBadgeUnlocks` above. Draining on read (rather than
+   * letting the caller just watch the array) is what guarantees a badge is
+   * celebrated exactly once, even though the result screen it's shown on can
+   * be torn down and rebuilt by a "play again" Reset.
+   *
+   * @returns {{id: string, name: string, icon: string, description: string}[]}
+   */
+  function takeBadgeUnlocks() {
+    return state.pendingBadgeUnlocks.splice(0, state.pendingBadgeUnlocks.length);
   }
 
   // NOTE: we wrap the returned object in reactive() so that computed refs
@@ -540,5 +583,6 @@ export function useGame(puzzle, options = {}) {
     undo,
     reset,
     lockSolution,
+    takeBadgeUnlocks,
   });
 }

@@ -20,6 +20,7 @@ const PANEL_LABELS = [
   { key: 'difficulty', label: 'Hard vs. easy' },
   { key: 'breadthDepth', label: 'Breadth vs. depth' },
   { key: 'watchSolve', label: 'Watch Solve' },
+  { key: 'badgePreview', label: 'Badge preview' },
 ];
 </script>
 

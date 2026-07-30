@@ -5,15 +5,24 @@
 // the playthrough-counting boundary (see attemptBoundary.test.js for the
 // isolated rule, and the "simulated attempt sequences" block below for it
 // exercised the way composables/useGame.js actually calls these functions).
+//
+// The One and Done block is deliberately heavy on negative cases: its
+// predecessor ("Clean Genius") shipped believing a "play again" Reset and an
+// earlier attempt's Undos both disqualified an attempt, when neither was
+// visible to it at all.
 // ============================================================================
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
   getBadgeStats,
+  getAttemptsForPuzzle,
   recordPegCleared,
   recordPlaythroughEnded,
   recordGiveUpReset,
   recordGeniusReached,
+  recordUndo,
+  recordResetPressed,
+  recordRankReached,
 } from '../badgeStats.js';
 import { isGiveUpReset } from '../attemptBoundary.js';
 
@@ -25,11 +34,14 @@ describe('getBadgeStats', () => {
   it('returns a fresh, zeroed schema when nothing has been recorded', () => {
     const stats = getBadgeStats();
     expect(stats.geniusPuzzleIds).toEqual([]);
-    expect(stats.cleanGeniusPuzzleIds).toEqual([]);
+    expect(stats.oneAndDonePuzzleIds).toEqual([]);
     expect(stats.totalPlaythroughs).toBe(0);
     expect(stats.playedThroughPuzzleIds).toEqual([]);
     expect(stats.resetsByPuzzle).toEqual({});
     expect(stats.resetsToGenius).toEqual({});
+    expect(stats.undosByPuzzle).toEqual({});
+    expect(stats.totalResets).toBe(0);
+    expect(stats.ranksReached).toEqual([]);
     expect(stats.pegsCleared).toEqual({ total: 0, byColor: {} });
   });
 
@@ -44,7 +56,28 @@ describe('getBadgeStats', () => {
     // Fields that didn't exist in the saved record yet get their defaults,
     // not undefined -- this is the whole point of migrate().
     expect(stats.totalPlaythroughs).toBe(0);
-    expect(stats.cleanGeniusPuzzleIds).toEqual([]);
+    expect(stats.undosByPuzzle).toEqual({});
+    expect(stats.totalResets).toBe(0);
+  });
+
+  it('drops v2 cleanGeniusPuzzleIds rather than carrying it into One and Done', () => {
+    window.localStorage.setItem(
+      'dot-hop:badge-stats',
+      JSON.stringify({
+        version: 2,
+        geniusPuzzleIds: [1, 2, 3],
+        cleanGeniusPuzzleIds: [1, 2, 3], // recorded by the check that over-awarded
+        totalPlaythroughs: 9,
+      })
+    );
+    const stats = getBadgeStats();
+    // Everything trustworthy survives...
+    expect(stats.geniusPuzzleIds).toEqual([1, 2, 3]);
+    expect(stats.totalPlaythroughs).toBe(9);
+    // ...and the untrustworthy field is gone, not renamed onto the new one.
+    expect(stats.cleanGeniusPuzzleIds).toBeUndefined();
+    expect(stats.oneAndDonePuzzleIds).toEqual([]);
+    expect(stats.version).toBe(3);
   });
 });
 
@@ -70,16 +103,45 @@ describe('recordPlaythroughEnded / playedThroughPuzzleIds', () => {
   });
 });
 
+describe('recordUndo', () => {
+  it('accumulates per puzzle, across attempts and visits', () => {
+    recordUndo(4);
+    recordUndo(4);
+    recordUndo(7);
+    const stats = getBadgeStats();
+    expect(stats.undosByPuzzle).toEqual({ 4: 2, 7: 1 });
+  });
+});
+
+describe('recordResetPressed', () => {
+  it('accumulates one lifetime total, not keyed by puzzle', () => {
+    recordResetPressed();
+    recordResetPressed();
+    recordResetPressed();
+    expect(getBadgeStats().totalResets).toBe(3);
+  });
+});
+
+describe('recordRankReached', () => {
+  it('collects each tier index once, no matter how often it is repeated', () => {
+    recordRankReached(0);
+    recordRankReached(0);
+    recordRankReached(4);
+    recordRankReached(0);
+    expect(getBadgeStats().ranksReached.sort()).toEqual([0, 4]);
+  });
+});
+
 describe('recordGeniusReached', () => {
   it('dedupes geniusPuzzleIds across repeated GENIUS finishes on the same puzzle', () => {
-    recordGeniusReached(9, { attemptUndoCount: 0 });
-    recordGeniusReached(9, { attemptUndoCount: 3 });
+    recordGeniusReached(9, { priorAttempts: 0 });
+    recordGeniusReached(9, { priorAttempts: 3 });
     expect(getBadgeStats().geniusPuzzleIds).toEqual([9]);
   });
 
   it('snapshots resetsToGenius on the FIRST reach and never overwrites it after', () => {
     recordGiveUpReset(9); // 1 reset before first genius
-    recordGeniusReached(9, { attemptUndoCount: 0 });
+    recordGeniusReached(9, { priorAttempts: 1 });
     expect(getBadgeStats().resetsToGenius[9]).toBe(1);
 
     // A later replay racks up more resets on this puzzle, then reaches
@@ -87,25 +149,42 @@ describe('recordGeniusReached', () => {
     // must not change.
     recordGiveUpReset(9);
     recordGiveUpReset(9);
-    recordGeniusReached(9, { attemptUndoCount: 1 });
+    recordGeniusReached(9, { priorAttempts: 4 });
     expect(getBadgeStats().resetsToGenius[9]).toBe(1);
     expect(getBadgeStats().resetsByPuzzle[9]).toBe(3);
   });
+});
 
-  it('marks Clean Genius only when zero Undos this attempt AND zero resets ever on this puzzle', () => {
-    recordGeniusReached(1, { attemptUndoCount: 0 });
-    expect(getBadgeStats().cleanGeniusPuzzleIds).toEqual([1]);
+describe('recordGeniusReached / One and Done', () => {
+  it('marks it on a first attempt with no Undos', () => {
+    recordGeniusReached(1, { priorAttempts: 0 });
+    expect(getBadgeStats().oneAndDonePuzzleIds).toEqual([1]);
   });
 
-  it('does not mark Clean Genius if the attempt used any Undo', () => {
-    recordGeniusReached(2, { attemptUndoCount: 1 });
-    expect(getBadgeStats().cleanGeniusPuzzleIds).toEqual([]);
+  it('does not mark it if the attempt used any Undo', () => {
+    recordUndo(2);
+    recordGeniusReached(2, { priorAttempts: 0 });
+    expect(getBadgeStats().oneAndDonePuzzleIds).toEqual([]);
   });
 
-  it('does not mark Clean Genius if the puzzle had any prior give-up Reset', () => {
-    recordGiveUpReset(3);
-    recordGeniusReached(3, { attemptUndoCount: 0 });
-    expect(getBadgeStats().cleanGeniusPuzzleIds).toEqual([]);
+  it('does not mark it if an EARLIER attempt on that puzzle used an Undo', () => {
+    // The old check only ever saw the current attempt's Undo count, which
+    // reset to zero the moment a new attempt started.
+    recordUndo(3); // attempt 1
+    recordPlaythroughEnded(3); // attempt 1 ends, badly
+    recordGeniusReached(3, { priorAttempts: 1 });
+    expect(getBadgeStats().oneAndDonePuzzleIds).toEqual([]);
+  });
+
+  it('does not mark it on any attempt after the first, however clean that attempt was', () => {
+    recordGeniusReached(4, { priorAttempts: 1 });
+    expect(getBadgeStats().oneAndDonePuzzleIds).toEqual([]);
+  });
+
+  it('dedupes, so replaying a One-and-Done puzzle to GENIUS again lists it once', () => {
+    recordGeniusReached(5, { priorAttempts: 0 });
+    recordGeniusReached(5, { priorAttempts: 0 });
+    expect(getBadgeStats().oneAndDonePuzzleIds).toEqual([5]);
   });
 });
 
@@ -114,12 +193,17 @@ describe('simulated attempt sequences (mirrors composables/useGame.js call order
   // do, in the same order and behind the same isGiveUpReset() gate --
   // without pulling in Vue/useGame.js's other side effects (sound, haptics,
   // PostHog puzzle_* events) that aren't relevant to counting playthroughs.
-  function simulateTerminalFinish(puzzleNumber, { genius = false, attemptUndoCount = 0 } = {}) {
+  function simulateTerminalFinish(puzzleNumber, { genius = false, rankTierIndex = 0 } = {}) {
+    // Read before the bump, exactly as jump() does -- One and Done depends
+    // on this being "attempts BEFORE this one".
+    const priorAttempts = getAttemptsForPuzzle(puzzleNumber);
     recordPlaythroughEnded(puzzleNumber);
-    if (genius) recordGeniusReached(puzzleNumber, { attemptUndoCount });
+    recordRankReached(rankTierIndex);
+    if (genius) recordGeniusReached(puzzleNumber, { priorAttempts });
   }
 
   function simulateReset(puzzleNumber, { roundOverBeforeReset, moveCount }) {
+    if (moveCount > 0) recordResetPressed();
     if (isGiveUpReset({ roundOverBeforeReset, moveCount })) {
       recordGiveUpReset(puzzleNumber);
       recordPlaythroughEnded(puzzleNumber);
@@ -136,7 +220,27 @@ describe('simulated attempt sequences (mirrors composables/useGame.js call order
     const stats = getBadgeStats();
     expect(stats.totalPlaythroughs).toBe(5);
     expect(stats.playedThroughPuzzleIds).toEqual([PUZZLE]);
+    // Give-up resets: none. Button presses: five. The two counters mean
+    // different things on purpose.
     expect(stats.resetsByPuzzle[PUZZLE]).toBeUndefined();
+    expect(stats.totalResets).toBe(5);
+  });
+
+  it('THE BUG: a "play again" Reset then a clean GENIUS is not One and Done', () => {
+    const PUZZLE = 11;
+    simulateTerminalFinish(PUZZLE); // attempt 1: a bad finish
+    simulateReset(PUZZLE, { roundOverBeforeReset: true, moveCount: 18 }); // "play again"
+    simulateTerminalFinish(PUZZLE, { genius: true, rankTierIndex: 4 }); // attempt 2: nails it
+
+    const stats = getBadgeStats();
+    expect(stats.geniusPuzzleIds).toEqual([PUZZLE]);
+    expect(stats.oneAndDonePuzzleIds).toEqual([]);
+  });
+
+  it('a first-attempt GENIUS with nothing taken back IS One and Done', () => {
+    const PUZZLE = 12;
+    simulateTerminalFinish(PUZZLE, { genius: true, rankTierIndex: 4 });
+    expect(getBadgeStats().oneAndDonePuzzleIds).toEqual([PUZZLE]);
   });
 
   it('a mid-round give-up Reset ends the attempt and counts once', () => {
@@ -145,37 +249,42 @@ describe('simulated attempt sequences (mirrors composables/useGame.js call order
     const stats = getBadgeStats();
     expect(stats.totalPlaythroughs).toBe(1);
     expect(stats.resetsByPuzzle[PUZZLE]).toBe(1);
+    expect(stats.totalResets).toBe(1);
   });
 
   it('Undo never ends an attempt or counts as a playthrough', () => {
-    // There is no "recordUndo" call into badgeStats.js at all -- Undo only
-    // touches useGame.js's own in-memory state.attemptUndoCount. Simulating
-    // a bunch of undos (i.e. doing nothing here) must leave the tally at 0.
-    expect(getBadgeStats().totalPlaythroughs).toBe(0);
+    // It does now leave a per-puzzle trace (recordUndo), but that trace is
+    // only ever read as a disqualifier -- it must not move any tally.
+    recordUndo(1);
+    recordUndo(1);
+    const stats = getBadgeStats();
+    expect(stats.totalPlaythroughs).toBe(0);
+    expect(stats.undosByPuzzle[1]).toBe(2);
   });
 
   it('mixes give-up resets and a terminal finish correctly across one puzzle', () => {
     const PUZZLE = 100;
     simulateReset(PUZZLE, { roundOverBeforeReset: false, moveCount: 2 }); // give-up #1
     simulateReset(PUZZLE, { roundOverBeforeReset: false, moveCount: 5 }); // give-up #2
-    simulateTerminalFinish(PUZZLE, { genius: true, attemptUndoCount: 0 }); // finally solved it
+    simulateTerminalFinish(PUZZLE, { genius: true, rankTierIndex: 4 }); // finally solved it
 
     const stats = getBadgeStats();
     expect(stats.totalPlaythroughs).toBe(3);
     expect(stats.resetsByPuzzle[PUZZLE]).toBe(2);
     expect(stats.resetsToGenius[PUZZLE]).toBe(2);
     expect(stats.geniusPuzzleIds).toEqual([PUZZLE]);
-    // Two resets happened before this GENIUS, so it isn't "clean".
-    expect(stats.cleanGeniusPuzzleIds).toEqual([]);
+    // Two attempts already ended before this GENIUS, so it isn't one-and-done.
+    expect(stats.oneAndDonePuzzleIds).toEqual([]);
     expect(stats.playedThroughPuzzleIds).toEqual([PUZZLE]);
   });
 
-  it('an idle Reset (no moves made) never ends an attempt', () => {
+  it('an idle Reset (no moves made) never ends an attempt or counts a press', () => {
     const PUZZLE = 55;
     simulateReset(PUZZLE, { roundOverBeforeReset: false, moveCount: 0 });
     const stats = getBadgeStats();
     expect(stats.totalPlaythroughs).toBe(0);
     expect(stats.resetsByPuzzle[PUZZLE]).toBeUndefined();
+    expect(stats.totalResets).toBe(0);
   });
 
   it('distinct puzzles played through counts unique ids regardless of replay count', () => {
@@ -186,5 +295,13 @@ describe('simulated attempt sequences (mirrors composables/useGame.js call order
     const stats = getBadgeStats();
     expect(stats.totalPlaythroughs).toBe(3);
     expect(stats.playedThroughPuzzleIds.sort()).toEqual([1, 2]);
+  });
+
+  it('collects rank tiers across puzzles, however often each is repeated', () => {
+    simulateTerminalFinish(1, { rankTierIndex: 0 });
+    simulateTerminalFinish(2, { rankTierIndex: 0 });
+    simulateTerminalFinish(3, { rankTierIndex: 2 });
+    simulateTerminalFinish(4, { rankTierIndex: 4, genius: true });
+    expect(getBadgeStats().ranksReached.sort()).toEqual([0, 2, 4]);
   });
 });

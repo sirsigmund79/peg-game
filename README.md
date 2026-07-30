@@ -126,13 +126,30 @@ that grid to help pick good candidates.
 ## Badges and streaks
 
 `logic/badgeStats.js` tracks lifetime counters (pegs cleared, playthroughs,
-resets, GENIUS finishes) that both power the Stats page's headline numbers
-and feed `logic/badges.js`'s six unlock conditions (checked by
-`logic/badgeUnlocks.js`). There's no player-facing badge UI yet -- an unlock
-today is just a PostHog event -- `components/BadgeStatsDevPanel.vue` (dev
-mode only) is a raw counter dump for debugging, not a preview of that
-eventual UI. `logic/streaks.js` derives the current/longest day-streak from
-`logic/history.js`'s local play history.
+resets, undos, ranks reached, GENIUS finishes) that both power the Stats
+page's headline numbers and feed `logic/badges.js`'s thirteen unlock
+conditions. `logic/badgeInput.js` composes those recorded counters with the
+one derived value a badge needs (the longest day-streak) into the single
+object every condition is evaluated against; `logic/badgeUnlocks.js` does the
+"have we told the player yet" diffing on top.
+
+Badges surface in two places, deliberately asymmetric:
+`components/BadgeUnlockCard.vue` appears on the result screen **only** at the
+moment something is earned (so a normal finish carries no badge chrome at
+all), and `components/BadgeShelf.vue` on the Stats page is their permanent
+home -- earned badges show their icon and name, everything else is an
+anonymous dimmed slot. `components/BadgeStatsDevPanel.vue` (dev mode only)
+remains a raw counter dump for debugging.
+
+`logic/streaks.js` derives the current/longest day-streak from
+`logic/history.js`'s local play history -- no streak counter is stored.
+
+One note for anyone reading old data: schema v3 dropped
+`cleanGeniusPuzzleIds` and its "Clean Genius" badge. That check believed it
+was catching Undos and Resets but could see neither a result-screen "play
+again" Reset nor an Undo from any attempt but the current one, so it fired on
+almost every GENIUS. Its replacement, One and Done, is checked against
+persisted per-puzzle Undo counts and the attempt number, and starts fresh.
 
 ## Analytics
 

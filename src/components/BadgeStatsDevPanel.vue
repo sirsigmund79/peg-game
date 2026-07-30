@@ -3,11 +3,17 @@
   components/BadgeStatsDevPanel.vue
   ----------------------------------------------------------------------------
   A bare-bones, unstyled way to check that logic/badgeStats.js and
-  logic/badgeUnlocks.js are counting/unlocking things correctly -- NOT a
-  preview of the eventual player-facing badge UI/Stats sheet (that's a
-  separate, later pass). Just a raw dump of the current device's stats plus
-  which badge ids have unlocked, with a Refresh button since neither store
-  is reactive on its own (both live in localStorage).
+  logic/badgeUnlocks.js are counting/unlocking things correctly -- NOT the
+  player-facing badge UI (that's components/BadgeShelf.vue on the stats page,
+  and components/BadgeUnlockCard.vue on the result screen). Just a raw dump of
+  the current device's stats plus which badge ids have unlocked, with a
+  Refresh button since neither store is reactive on its own (both live in
+  localStorage).
+
+  Dumps logic/badgeInput.js's composed object rather than badgeStats.js's
+  stored one, so DERIVED values a badge reads (longestStreak) show up here
+  too -- otherwise "why hasn't Five Timers Club fired" has no answer on this
+  panel.
 
   IMPORTANT: dev-only, same as DevPanel.vue -- only ever rendered when
   `import.meta.env.DEV` is true, never in a production build.
@@ -15,20 +21,21 @@
 -->
 <script setup>
 import { ref } from 'vue';
-import { getBadgeStats } from '../logic/badgeStats.js';
+import { getBadgeInput } from '../logic/badgeInput.js';
 import { getUnlockedBadgeIds } from '../logic/badgeUnlocks.js';
 import { BADGE_DEFINITIONS } from '../logic/badges.js';
 
-const stats = ref(getBadgeStats());
+const stats = ref(getBadgeInput());
 const unlockedIds = ref(getUnlockedBadgeIds());
 
 function refresh() {
-  stats.value = getBadgeStats();
+  stats.value = getBadgeInput();
   unlockedIds.value = getUnlockedBadgeIds();
 }
 
-function badgeName(id) {
-  return BADGE_DEFINITIONS.find((badge) => badge.id === id)?.name ?? id;
+function badgeLabel(id) {
+  const badge = BADGE_DEFINITIONS.find((definition) => definition.id === id);
+  return badge ? `${badge.icon} ${badge.name}` : id;
 }
 </script>
 
@@ -42,7 +49,7 @@ function badgeName(id) {
 
     <p class="section-title">Unlocked badges ({{ unlockedIds.length }}/{{ BADGE_DEFINITIONS.length }})</p>
     <ul v-if="unlockedIds.length" class="badge-list">
-      <li v-for="id in unlockedIds" :key="id">{{ badgeName(id) }} <span class="badge-id">({{ id }})</span></li>
+      <li v-for="id in unlockedIds" :key="id">{{ badgeLabel(id) }} <span class="badge-id">({{ id }})</span></li>
     </ul>
     <p v-else class="fixed-note">None yet.</p>
 
