@@ -4,14 +4,42 @@
 // Covers the stateful diffing layer on top of logic/badges.js's pure checks:
 // a badge should only ever be reported as "newly unlocked" once, even though
 // checkForNewlyUnlockedBadges() re-evaluates every badge on every call.
+//
+// Plus the one-time baseline that back-awards a returning player's already-
+// earned badges at boot -- the reason the diffing layer never gets handed a
+// veteran's entire shelf at once. See establishBadgeBaseline().
 // ============================================================================
 
-import { describe, it, expect, beforeEach } from 'vitest';
-import { checkForNewlyUnlockedBadges, getUnlockedBadgeIds, setUnlockedBadgeIds } from '../badgeUnlocks.js';
-import { recordGeniusReached, recordPlaythroughEnded, recordResetPressed } from '../badgeStats.js';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import {
+  checkForNewlyUnlockedBadges,
+  establishBadgeBaseline,
+  getBadgeDefinitions,
+  getUnlockedBadgeIds,
+  setUnlockedBadgeIds,
+  takeBadgeBacklogWelcome,
+} from '../badgeUnlocks.js';
+import {
+  recordGeniusReached,
+  recordPegCleared,
+  recordPlaythroughEnded,
+  recordResetPressed,
+} from '../badgeStats.js';
+import { EVENTS, track } from '../../services/analytics.js';
+
+vi.mock('../../services/analytics.js', () => ({
+  EVENTS: { BADGE_UNLOCKED: 'badge_unlocked' },
+  track: vi.fn(),
+}));
+
+/** Every badge_unlocked payload sent since the last reset, in order. */
+function unlockEvents() {
+  return track.mock.calls.filter(([event]) => event === EVENTS.BADGE_UNLOCKED).map(([, properties]) => properties);
+}
 
 beforeEach(() => {
   window.localStorage.clear();
+  track.mockClear();
 });
 
 describe('checkForNewlyUnlockedBadges', () => {
@@ -77,6 +105,118 @@ describe('checkForNewlyUnlockedBadges', () => {
     const unlocked = checkForNewlyUnlockedBadges(4);
     expect(unlocked.map((badge) => badge.id)).toEqual(['high_five']);
     expect(JSON.parse(window.localStorage.getItem('dot-hop:unlocked-badges'))).toEqual(['high_five']);
+  });
+});
+
+describe('establishBadgeBaseline', () => {
+  /** Stats a player could plausibly have arrived with the day badges shipped. */
+  function seedVeteranStats() {
+    for (let i = 0; i < 1000; i++) recordPegCleared(0);
+    for (let i = 0; i < 100; i++) recordPlaythroughEnded(3000 + i);
+    for (let i = 0; i < 50; i++) recordResetPressed();
+  }
+
+  it('answers the question it exists for: 1,000 lifetime dots back-awards First Fifty, not just the 1,000 Dot Club', () => {
+    // First Fifty is a floor on a lifetime counter, not a window over the
+    // first 50 hops -- so hopping 1,000 dots before badges shipped satisfies
+    // BOTH, and neither is ever out of reach for having played "too much".
+    for (let i = 0; i < 1000; i++) recordPegCleared(0);
+
+    const backlog = establishBadgeBaseline();
+    expect(backlog.ids).toContain('first_fifty');
+    expect(backlog.ids).toContain('thousand_dot_club');
+    expect(getUnlockedBadgeIds()).toContain('first_fifty');
+  });
+
+  it('does not leave the backlog to pile onto the next result screen', () => {
+    // THE REGRESSION THIS EXISTS TO PREVENT: without the baseline, a veteran's
+    // next finished round newly-unlocks a dozen badges at once and PlayView
+    // renders a card for every one of them.
+    seedVeteranStats();
+    const backlog = establishBadgeBaseline();
+    expect(backlog.count).toBeGreaterThan(5);
+
+    expect(checkForNewlyUnlockedBadges(3099)).toEqual([]);
+  });
+
+  it('marks its awards as backfilled so the funnel can tell them from a real unlock', () => {
+    seedVeteranStats();
+    establishBadgeBaseline();
+
+    const events = unlockEvents();
+    expect(events.length).toBeGreaterThan(0);
+    expect(events.every((properties) => properties.backfilled === true)).toBe(true);
+    // No puzzle earned these, so none is claimed to have.
+    expect(events.every((properties) => properties.puzzle_number === null)).toBe(true);
+  });
+
+  it('is one-way: a second boot grants nothing and sends nothing', () => {
+    seedVeteranStats();
+    establishBadgeBaseline();
+    const grantedFirst = getUnlockedBadgeIds();
+    track.mockClear();
+
+    expect(establishBadgeBaseline()).toBeNull();
+    expect(getUnlockedBadgeIds()).toEqual(grantedFirst);
+    expect(unlockEvents()).toEqual([]);
+  });
+
+  it('does nothing visible for a new player, but still records that it ran', () => {
+    expect(establishBadgeBaseline()).toBeNull();
+    expect(getUnlockedBadgeIds()).toEqual([]);
+    expect(unlockEvents()).toEqual([]);
+    // The empty write is the point -- otherwise this player stays
+    // "un-baselined" forever and collects a welcome card months later for
+    // badges they earned the honest way.
+    expect(window.localStorage.getItem('dot-hop:badge-baseline')).not.toBeNull();
+  });
+
+  it('leaves a badge earned AFTER the baseline to unlock normally', () => {
+    establishBadgeBaseline();
+
+    for (let i = 0; i < 5; i++) recordPlaythroughEnded(i);
+    const unlocked = checkForNewlyUnlockedBadges(4);
+    expect(unlocked.map((badge) => badge.id)).toEqual(['high_five']);
+    expect(unlockEvents()).toEqual([{ badge_id: 'high_five', puzzle_number: 4, backfilled: false }]);
+  });
+});
+
+describe('takeBadgeBacklogWelcome', () => {
+  it('hands the backlog over exactly once', () => {
+    for (let i = 0; i < 1000; i++) recordPegCleared(0);
+    establishBadgeBaseline();
+
+    const welcome = takeBadgeBacklogWelcome();
+    expect(welcome.count).toBeGreaterThan(0);
+    expect(welcome.ids).toContain('thousand_dot_club');
+    expect(takeBadgeBacklogWelcome()).toBeNull();
+  });
+
+  it('has nothing to announce to a new player, even before their first round', () => {
+    establishBadgeBaseline();
+    expect(takeBadgeBacklogWelcome()).toBeNull();
+  });
+
+  it('has nothing to announce before the baseline has ever run', () => {
+    expect(takeBadgeBacklogWelcome()).toBeNull();
+  });
+});
+
+describe('getBadgeDefinitions', () => {
+  it('returns full definitions in shelf order, whatever order the ids arrive in', () => {
+    const badges = getBadgeDefinitions(['thousand_dot_club', 'high_five', 'first_fifty']);
+    expect(badges.map((badge) => badge.id)).toEqual(['high_five', 'first_fifty', 'thousand_dot_club']);
+    expect(badges[0]).toEqual({
+      id: 'high_five',
+      name: 'High Five',
+      icon: '✋',
+      description: 'Play through 5 different puzzles.',
+      rare: false,
+    });
+  });
+
+  it('skips an id logic/badges.js no longer defines', () => {
+    expect(getBadgeDefinitions(['clean_genius', 'high_five']).map((badge) => badge.id)).toEqual(['high_five']);
   });
 });
 

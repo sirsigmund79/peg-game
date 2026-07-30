@@ -141,6 +141,21 @@ home -- earned badges show their icon and name, everything else is an
 anonymous dimmed slot. `components/BadgeStatsDevPanel.vue` (dev mode only)
 remains a raw counter dump for debugging.
 
+Every unlock condition is a **floor on a lifetime total**, never a window --
+First Fifty is "at least 50 dots cleared," not "your first 50" -- so no badge
+can be missed by having played too much before it existed, and none can
+un-earn itself. That makes back-awarding automatic but badly timed: the
+counters shipped weeks before any badge UI did, so a returning player's stats
+can satisfy nearly the whole shelf at once, and the diffing layer would hand
+all of it to their next result screen in one wall of cards. So
+`logic/badgeUnlocks.js`'s `establishBadgeBaseline()` runs once per browser at
+boot (`main.js`, after `initAnalytics()`), grants that backlog silently, and
+leaves `components/BadgeBacklogCard.vue` to announce the whole thing as one
+summary card on the next result screen. Nothing is earned that wouldn't have
+unlocked on the player's very next finished round anyway -- only when it lands
+and how it's told. Backfilled awards still fire `badge_unlocked`, flagged
+`backfilled: true` so they can be excluded from earned-in-the-moment funnels.
+
 `logic/streaks.js` derives the current/longest day-streak from
 `logic/history.js`'s local play history -- no streak counter is stored.
 
@@ -216,7 +231,7 @@ src/
     streaks.js                      Current/longest day-streak, derived from history.js
     attemptBoundary.js              The rule for whether a Reset counts as "giving up" on an attempt
     badges.js / badgeStats.js / badgeUnlocks.js
-                                     Six lifetime badge conditions, the raw counters they're computed from, and unlock-diffing (see "Badges" above)
+                                     Thirteen lifetime badge conditions, the raw counters they're computed from, and unlock-diffing plus the one-time back-award baseline (see "Badges" above)
     ghostMoves.js / ghostSettings.js
                                      Ghost Outline's per-state "already tried this jump" tracking and its persisted settings (see "Ghost Outline" above)
     featureFlags.js                 The one hardcoded on/off switch for Ghost Outline
@@ -243,6 +258,8 @@ src/
     GhostToggle.vue                 Ghost Outline's beneath-the-board on/off toggle (see "Ghost Outline" above)
     ResultHeader.vue / DotsLeftOnBoard.vue / RankLadder.vue / ResultFooter.vue
                                      Result screen: rank header, dots-left tally (with inline Goal), rank ladder, share + reset
+    BadgeShelf.vue / BadgeUnlockCard.vue / BadgeBacklogCard.vue
+                                     The permanent shelf on the Stats page, the just-earned card on the result screen, and the one-time "you already earned these" summary (see "Badges" above)
     PlayView.vue                    The actual game screen -- loads a puzzle, plays it, shows the result
     ArchiveView.vue / ArchiveDayStrip.vue
                                      Browse/replay past days, and the result screen's "nearby days" strip

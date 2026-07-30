@@ -44,9 +44,14 @@ export const EVENTS = {
   RESULT_STREAK_CLICKED: 'result_streak_clicked',
   // _UNLOCKED fires the moment a badge's condition is met (see
   // logic/badgeUnlocks.js); _CARD_CLICKED when the player taps the unlock
-  // card on the result screen through to their badge shelf.
+  // card on the result screen through to their badge shelf. _UNLOCKED carries
+  // a `backfilled` flag: true rows are the one-time baseline back-award for a
+  // player who already qualified before badges shipped, and should be excluded
+  // from any "earned it in the moment" funnel. _BACKLOG_CARD_CLICKED is the
+  // single summary card that announces such a back-award.
   BADGE_UNLOCKED: 'badge_unlocked',
   BADGE_CARD_CLICKED: 'badge_card_clicked',
+  BADGE_BACKLOG_CARD_CLICKED: 'badge_backlog_card_clicked',
   GHOST_OUTLINE_BASELINE_CAPTURED: 'ghost_outline_baseline_captured',
   HOW_TO_PLAY_SHOWN: 'how_to_play_shown',
   HOW_TO_PLAY_STEP_VIEWED: 'how_to_play_step_viewed',

@@ -49,6 +49,7 @@ import { useRouter } from '../composables/useRouter.js';
 import { pendingCustomPuzzle } from '../composables/usePendingPuzzle.js';
 import { buildShareText } from '../services/viral.js';
 import { vibrateBadgeUnlock } from '../fx/haptics.js';
+import { takeBadgeBacklogWelcome, getBadgeDefinitions } from '../logic/badgeUnlocks.js';
 import { EVENTS, track } from '../services/analytics.js';
 import { useGhostOutline } from '../composables/useGhostOutline.js';
 import { useDevPanels } from '../composables/useDevPanels.js';
@@ -60,6 +61,7 @@ import ResultHeader from './ResultHeader.vue';
 import ResultStreakPill from './ResultStreakPill.vue';
 import DotsLeftOnBoard from './DotsLeftOnBoard.vue';
 import RankLadder from './RankLadder.vue';
+import BadgeBacklogCard from './BadgeBacklogCard.vue';
 import BadgeUnlockCard from './BadgeUnlockCard.vue';
 import BadgeUnlockPreview from './BadgeUnlockPreview.vue';
 import ResultFooter from './ResultFooter.vue';
@@ -175,6 +177,11 @@ const reveal = useResultReveal();
 // away, so a "play again" Reset doesn't take the celebration with it into the
 // next round.
 const shownBadgeUnlocks = ref([]);
+// The one-time "you already earned these" summary, for a player whose stats
+// predate the badge system (see logic/badgeUnlocks.js's baseline). Held and
+// drained exactly like shownBadgeUnlocks above, and normally empty forever:
+// it can only ever be non-empty once, on one device, for one result screen.
+const shownBadgeBacklog = ref([]);
 // Dev-only (see BadgeUnlockPreview.vue): badge cards fired onto the result
 // screen by hand. Kept in their own list, never merged into the queue above,
 // so a preview can't be confused with something actually earned -- and each
@@ -258,6 +265,7 @@ watch(
       showResult.value = false;
       showArchiveStrip.value = false;
       shownBadgeUnlocks.value = [];
+      shownBadgeBacklog.value = [];
     previewBadgeUnlocks.value = [];
       return;
     }
@@ -282,9 +290,16 @@ watch(
   (isReady) => {
     if (!isReady) return;
     shownBadgeUnlocks.value = game.value.takeBadgeUnlocks();
+    // Drained on the same beat, from the same kind of one-shot queue -- see
+    // logic/badgeUnlocks.js's takeBadgeBacklogWelcome(). The two can't
+    // realistically collide: the baseline already granted everything this
+    // device qualified for, so the round that shows the welcome has nothing
+    // left to unlock alongside it.
+    const backlog = takeBadgeBacklogWelcome();
+    shownBadgeBacklog.value = backlog ? getBadgeDefinitions(backlog.ids) : [];
     // One flourish for the batch, not one per card -- the cards stagger in
     // over the next second or so and a buzz each would just read as noise.
-    if (shownBadgeUnlocks.value.length > 0) vibrateBadgeUnlock();
+    if (shownBadgeUnlocks.value.length > 0 || shownBadgeBacklog.value.length > 0) vibrateBadgeUnlock();
   }
 );
 
@@ -300,6 +315,7 @@ watch(
     showResult.value = false;
     showArchiveStrip.value = false;
     shownBadgeUnlocks.value = [];
+    shownBadgeBacklog.value = [];
     previewBadgeUnlocks.value = [];
     puzzle.value = resolvePuzzle();
     game.value = useGame(puzzle.value, { source: resolveSource() });
@@ -416,6 +432,11 @@ onBeforeUnmount(() => {
                throughout (see its `compact` prop) and must never itself
                flicker opacity:0 as part of this. -->
           <div v-if="showResult" class="result-extras">
+            <!-- The one-time backlog welcome, above the unlock cards because
+                 it's the older news of the two. Empty on every result screen
+                 but at most one, ever, per device (see BadgeBacklogCard.vue). -->
+            <BadgeBacklogCard v-if="shownBadgeBacklog.length > 0" :badges="shownBadgeBacklog" />
+
             <!-- Anything the player just earned (see BadgeUnlockCard.vue).
                  Almost always empty -- badges cost the result screen nothing
                  on a normal finish, which is the point. Gated on ladderReady

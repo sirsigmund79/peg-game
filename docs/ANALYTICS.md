@@ -69,8 +69,9 @@ dev-vs-production split `app_env` already covers.
 | `archive_puzzle_selected` | A day picked from the archive | `puzzle_number`, `days_ago`, `already_played`, `is_today` |
 | `stats_nav_clicked` | Header's Stats icon tapped (`App.vue`) | — |
 | `stats_archive_cta_clicked` | "Check out the Archive" tapped on the stats page (`StatsView.vue`) | — |
-| `badge_unlocked` | A badge's unlock condition (see `logic/badges.js`) is newly satisfied | `badge_id`, `puzzle_number` |
-| `badge_card_clicked` | The unlock card on the result screen is tapped through to the badge shelf (`BadgeUnlockCard.vue`) | `badge_id` |
+| `badge_unlocked` | A badge's unlock condition (see `logic/badges.js`) is newly satisfied — **or**, with `backfilled: true`, is back-awarded by the one-time baseline (see below) | `badge_id`, `puzzle_number`, `backfilled` |
+| `badge_card_clicked` | The unlock card on the result screen is tapped through to the badge shelf (`BadgeUnlockCard.vue`) | `badge_id`, `rare` |
+| `badge_backlog_card_clicked` | The one-time "you already earned these" summary card is tapped through to the badge shelf (`BadgeBacklogCard.vue`) | `count` |
 | `ghost_outline_baseline_captured` | Once per browser, on the first app boot after this instrumentation ships (`initAnalytics()`) | `baseline_genius_rate`, `baseline_lifetime_puzzles_completed`, `baseline_current_streak_days` |
 | `how_to_play_shown` | The How to Play walkthrough opens — only ever via the header's "?" button now (no longer auto-shown on first visit) (`useHowToPlay.js`) | `source` (`manual`) |
 | `how_to_play_step_viewed` | A walkthrough slide becomes visible (fires on open and on every Next/Back/dot navigation) (`HowToPlayModal.vue`) | `step` (1-indexed), `stepCount` |
@@ -109,6 +110,19 @@ analysis, not a limitation.
 **Deliberately not instrumented:** the level editor and `#/dev` tools are
 excluded from production builds entirely (`import.meta.env.DEV`), so there's
 no prod data to gain.
+
+**On `badge_unlocked`'s `backfilled` flag:** badges shipped weeks after the
+counters they read, and every unlock condition is a floor on a lifetime total
+rather than a window, so returning players already satisfied most of the
+shelf. `logic/badgeUnlocks.js`'s `establishBadgeBaseline()` grants that
+backlog once per browser at boot and marks each award `backfilled: true`
+with `puzzle_number: null` (no puzzle earned them, and pinning them to
+whichever one happened to be loaded would be a lie the funnel can't see
+through). **Filter to `backfilled = false` for any "earned it in the moment"
+question** — rate per completion, time-to-first-badge, which badge lands
+first. Keep both for shelf-completion questions. Expect a one-off burst of
+`backfilled: true` events in the days after this ships, concentrated in
+long-tenured players, and none from anyone who started afterwards.
 
 Also: shared result links now carry a `?ref=share` query param (see
 `services/viral.js`) — the only way to tell "a visit that came from someone
