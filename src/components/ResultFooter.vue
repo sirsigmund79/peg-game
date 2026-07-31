@@ -28,10 +28,12 @@ const props = defineProps({
   rank: { type: String, required: true },
   won: { type: Boolean, required: true },
   overPar: { type: Number, required: true },
-  // Whether replaying is still allowed. Goes false once the player has
+  // Whether replaying is still allowed. Goes false in two cases: the player
   // watched the solution and locked their rank (see
-  // components/WatchSolution.vue) -- Reset is then dropped entirely, leaving
-  // Share to take the full row.
+  // components/WatchSolution.vue), or they've already taken this puzzle to
+  // Genius, which is par -- there's nothing left to beat, so a replay can
+  // only do worse (see composables/useGame.js's `geniusLocked`). Either way
+  // Reset is dropped entirely, leaving Share to take the full row.
   allowReset: { type: Boolean, default: true },
 });
 

@@ -23,6 +23,7 @@ import {
   recordUndo,
   recordResetPressed,
   recordRankReached,
+  hasReachedGenius,
 } from '../badgeStats.js';
 import { isGiveUpReset } from '../attemptBoundary.js';
 
@@ -152,6 +153,47 @@ describe('recordGeniusReached', () => {
     recordGeniusReached(9, { priorAttempts: 4 });
     expect(getBadgeStats().resetsToGenius[9]).toBe(1);
     expect(getBadgeStats().resetsByPuzzle[9]).toBe(3);
+  });
+});
+
+describe('hasReachedGenius', () => {
+  // The result screen drops its Reset button on the strength of this one
+  // answer (see composables/useGame.js's `geniusLocked`), so a false negative
+  // here hands a perfect score back a way to replay it into a worse one.
+  it('is false for a puzzle that has never been finished at GENIUS', () => {
+    expect(hasReachedGenius(7)).toBe(false);
+    // A finish at a lower rank records plenty of other stats, but not this.
+    recordRankReached(3);
+    recordPlaythroughEnded(7);
+    expect(hasReachedGenius(7)).toBe(false);
+  });
+
+  it('is true once GENIUS has been reached on that puzzle', () => {
+    recordGeniusReached(7, { priorAttempts: 0 });
+    expect(hasReachedGenius(7)).toBe(true);
+  });
+
+  it('stays true after a later, worse attempt on the same puzzle', () => {
+    // geniusPuzzleIds is "ever," not "most recently" -- unlike
+    // logic/history.js, which a worse replay overwrites.
+    recordGeniusReached(7, { priorAttempts: 0 });
+    recordRankReached(2);
+    recordPlaythroughEnded(7);
+    expect(hasReachedGenius(7)).toBe(true);
+  });
+
+  it('is per puzzle -- acing one puzzle says nothing about the next', () => {
+    recordGeniusReached(12, { priorAttempts: 0 });
+    expect(hasReachedGenius(12)).toBe(true);
+    expect(hasReachedGenius(13)).toBe(false);
+  });
+
+  it('survives a reload, since it reads back out of storage', () => {
+    recordGeniusReached(7, { priorAttempts: 0 });
+    // Nothing in memory carries over between page loads; the stored record
+    // is the whole reason the lock holds on a restored result screen.
+    expect(JSON.parse(window.localStorage.getItem('dot-hop:badge-stats')).geniusPuzzleIds).toEqual([7]);
+    expect(hasReachedGenius(7)).toBe(true);
   });
 });
 
