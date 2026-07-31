@@ -42,6 +42,7 @@ import {
   recordResetPressed,
   recordRankReached,
   getAttemptsForPuzzle,
+  hasReachedGenius,
 } from '../logic/badgeStats.js';
 import { isGiveUpReset } from '../logic/attemptBoundary.js';
 import { checkForNewlyUnlockedBadges } from '../logic/badgeUnlocks.js';
@@ -167,6 +168,17 @@ export function useGame(puzzle, options = {}) {
     // stays locked across reloads; while set, reset() refuses to run, so the
     // player can no longer replay for a better result.
     solutionLocked: puzzle.puzzleNumber != null ? isSolutionLocked(puzzle.puzzleNumber) : false,
+    // True once GENIUS has ever been reached on this puzzle (see
+    // logic/badgeStats.js's geniusPuzzleIds). Genius is par -- there is
+    // nothing better left to play for -- so the result screen drops its
+    // Reset button rather than inviting a replay that can only do worse
+    // (components/PlayView.vue reads this for ResultFooter's `allow-reset`).
+    // Seeded from storage so it survives a reload or an archive revisit, and
+    // set again the moment a Genius round ends (see jump() below). Unlike
+    // `solutionLocked`, this does NOT make reset() itself a no-op: the
+    // mid-round Undo/Reset strip stays fully usable, since a player part-way
+    // through a board still needs a way to start it over.
+    geniusLocked: puzzle.puzzleNumber != null ? hasReachedGenius(puzzle.puzzleNumber) : false,
   });
 
   // Skipped for an ephemeral demo board (see the options doc above) -- a
@@ -398,6 +410,10 @@ export function useGame(puzzle, options = {}) {
         recordRankReached(getRankTierIndex(overParAtEnd, removable));
         if (getRankForOverPar(overParAtEnd, removable).rank === 'Genius') {
           recordGeniusReached(puzzle.puzzleNumber, { priorAttempts });
+          // Set straight from what just happened rather than re-reading
+          // storage, so the result screen about to render already knows to
+          // leave Reset off (see the state field's own comment above).
+          state.geniusLocked = true;
         }
         state.pendingBadgeUnlocks.push(...checkForNewlyUnlockedBadges(puzzle.puzzleNumber));
       }
@@ -576,6 +592,11 @@ export function useGame(puzzle, options = {}) {
     // components/WatchSolution.vue to know it's already been done. See
     // lockSolution() and logic/solutionLock.js.
     solutionLocked: computed(() => state.solutionLocked),
+    // Whether this puzzle has ever been taken to Genius -- components/
+    // PlayView.vue reads this alongside solutionLocked to hide the result
+    // screen's Reset button. See the state field above for why this one
+    // deliberately leaves reset() itself alone.
+    geniusLocked: computed(() => state.geniusLocked),
     holeHasPeg,
     getHoleColor,
     selectHole,

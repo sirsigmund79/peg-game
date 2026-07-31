@@ -122,6 +122,20 @@ export function getBadgeStats() {
 }
 
 /**
+ * Whether GENIUS has ever been reached on one specific puzzle -- a narrow read
+ * of `geniusPuzzleIds` for callers that only care about a single puzzle rather
+ * than the whole stats blob (composables/useGame.js uses it to drop the result
+ * screen's Reset button, since there's nothing left to replay for). Permanent
+ * once set, like logic/solutionLock.js's isSolutionLocked().
+ *
+ * @param {number} puzzleNumber
+ * @returns {boolean}
+ */
+export function hasReachedGenius(puzzleNumber) {
+  return getStore().geniusPuzzleIds.includes(puzzleNumber);
+}
+
+/**
  * Records one peg cleared (jumped over and removed), lifetime.
  *
  * @param {number} colorIndex - matches logic/pegColors.js's PEG_COLORS id

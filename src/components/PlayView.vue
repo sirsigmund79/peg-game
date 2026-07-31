@@ -465,7 +465,7 @@ onBeforeUnmount(() => {
               :rank="game.rank.rank"
               :won="game.hasWon"
               :over-par="game.overPar"
-              :allow-reset="!game.solutionLocked"
+              :allow-reset="!game.solutionLocked && !game.geniusLocked"
               @reset="game.reset()"
             />
 
