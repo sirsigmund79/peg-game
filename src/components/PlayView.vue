@@ -52,11 +52,13 @@ import { vibrateBadgeUnlock } from '../fx/haptics.js';
 import { takeBadgeBacklogWelcome, getBadgeDefinitions } from '../logic/badgeUnlocks.js';
 import { EVENTS, track } from '../services/analytics.js';
 import { useGhostOutline } from '../composables/useGhostOutline.js';
+import { useProMode } from '../composables/useProMode.js';
 import { useDevPanels } from '../composables/useDevPanels.js';
 import Board from './Board.vue';
 import StatBar from './StatBar.vue';
 import Controls from './Controls.vue';
 import GhostToggle from './GhostToggle.vue';
+import ProModeToggle from './ProModeToggle.vue';
 import ResultHeader from './ResultHeader.vue';
 import ResultStreakPill from './ResultStreakPill.vue';
 import DotsLeftOnBoard from './DotsLeftOnBoard.vue';
@@ -78,6 +80,7 @@ const isDevBuild = import.meta.env.DEV;
 
 const { route } = useRouter();
 const { ghost } = useGhostOutline();
+const { pro } = useProMode();
 const { devPanels } = useDevPanels();
 
 /** Figures out which puzzle to load: a hand-off from the editor, a specific "#/play/N", or today's. */
@@ -348,6 +351,7 @@ const shareText = computed(() =>
     formattedDate: formattedDate.value,
     rank: game.value.rank.rank,
     tries: game.value.tries,
+    proMode: game.value.proRound,
   })
 );
 
@@ -504,10 +508,14 @@ onBeforeUnmount(() => {
     </div>
 
     <GhostToggle v-if="ghost.flagEnabled && ghost.discovered && !game.roundOver" />
+    <!-- Directly above the strip it changes, so turning it on visibly takes
+         the Undo button away rather than changing something off-screen. -->
+    <ProModeToggle v-if="!game.roundOver" />
     <Controls
       v-if="!game.roundOver"
       :can-undo="game.state.undoStack.length > 0"
       :round-over="game.roundOver"
+      :pro-mode="pro.enabled"
       @undo="game.undo()"
       @reset="game.reset()"
     />
