@@ -186,6 +186,16 @@ tracking (`logic/ghostMoves.js`) and its analytics already run
 unconditionally regardless of the flag, so there's a real "before" baseline
 banked by whenever it does launch.
 
+## Pro mode
+
+A single switch under the board (`components/ProModeToggle.vue`) that takes
+Undo away: every jump is final, and Reset is the only way back. Nothing else
+about the puzzle changes -- same board, same par, same ranks. It defaults to
+off, persists per browser (`logic/proMode.js`), and can be flipped mid-round,
+since nothing about it is retroactive. Modelled on the difficulty toggle in
+Breadcrumbs: the control names the state it is in, and says in one line what
+that state does.
+
 ## Level editor
 
 The editor (Dev page, or opened from the admin grid) lets you hand-design a
@@ -235,6 +245,7 @@ src/
     ghostMoves.js / ghostSettings.js
                                      Ghost Outline's per-state "already tried this jump" tracking and its persisted settings (see "Ghost Outline" above)
     featureFlags.js                 The one hardcoded on/off switch for Ghost Outline
+    proMode.js                      Pro mode's persisted on/off switch (see "Pro mode" above)
     puzzleDag.js / puzzlePerceivedDifficulty.js / puzzleDifficulty.js / puzzleDifficultyRecord.js
                                      Two independent difficulty scorers (structural + perceived) and where their output is stored (see "Puzzle scheduling" above)
     puzzleDesignConversion.js / puzzleAdminResolve.js
@@ -248,14 +259,16 @@ src/
     useEditor.js / useAdminPuzzleEditor.js
                                      Level editor state, and the admin grid's edit-panel state
     useGhostOutline.js              Reactive singleton for Ghost Outline's flag/enabled/discovered state
+    useProMode.js                   Reactive singleton for Pro mode's on/off state
     useResultReveal.js              The result screen's sequential score-reveal animation sequencing
 
   components/
     Board.vue                       Draws holes + pegs, positions them, animates jumps, handles taps -- also becomes the result screen's mini board
     PuzzleGlyph.vue                 Small pointillist puzzle preview used by the archive
     StatBar.vue                     Pegs left / moves / target chips above the board
-    Controls.vue                    Undo + Reset buttons
+    Controls.vue                    Undo + Reset buttons (Reset alone in Pro mode)
     GhostToggle.vue                 Ghost Outline's beneath-the-board on/off toggle (see "Ghost Outline" above)
+    ProModeToggle.vue               Pro mode's beneath-the-board on/off toggle (see "Pro mode" above)
     ResultHeader.vue / DotsLeftOnBoard.vue / RankLadder.vue / ResultFooter.vue
                                      Result screen: rank header, dots-left tally (with inline Goal), rank ladder, share + reset
     BadgeShelf.vue / BadgeUnlockCard.vue / BadgeBacklogCard.vue
@@ -318,5 +331,6 @@ vite-plugins/
   (periodically-refreshed, currently smaller) pool. See "How never repeats
   actually works" above for why.
 - **There is no in-game hint.** The only ways to recover from a bad move are
-  Undo (unlimited), Reset, and (once launched) Ghost Outline's "have I tried
-  this before" memory aid -- never a hint about which move is actually good.
+  Undo (unlimited, and gone entirely in Pro mode), Reset, and (once launched)
+  Ghost Outline's "have I tried this before" memory aid -- never a hint about
+  which move is actually good.
