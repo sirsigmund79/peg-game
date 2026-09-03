@@ -196,6 +196,16 @@ since nothing about it is retroactive. Modelled on the difficulty toggle in
 Breadcrumbs: the control names the state it is in, and says in one line what
 that state does.
 
+A round played in Pro start to finish adds a `Pro mode — no Undo` line to the
+share text. Playing with Undo available adds nothing: that's the plain state
+of the game, not something to announce. What counts as a Pro round is decided
+by `useGame.js`'s `proRound`, and it is deliberately not a live read of the
+toggle -- a jump taken with Pro off spoils the attempt, so does an Undo, and
+the answer is settled the moment the round ends. Flipping the switch on the
+result screen (or on a result screen resumed after a reload, which is why
+`logic/roundState.js` stores the flag with the round) can neither buy the
+line nor take it away.
+
 ## Level editor
 
 The editor (Dev page, or opened from the admin grid) lets you hand-design a
@@ -237,7 +247,7 @@ src/
     boardLayout.js                  Shared hole position/size math used by Board.vue and PuzzleGlyph.vue
     storage.js                      Tiny safe localStorage wrapper every other *Settings/*State module builds on
     history.js / bestResults.js / roundState.js
-                                     Per-puzzle local play history, best-ever result, and "resume the result screen" state
+                                     Per-puzzle local play history, best-ever result, and "resume the result screen" state (which carries the finished round's Pro-mode flag)
     streaks.js                      Current/longest day-streak, derived from history.js
     attemptBoundary.js              The rule for whether a Reset counts as "giving up" on an attempt
     badges.js / badgeStats.js / badgeUnlocks.js
@@ -293,7 +303,7 @@ src/
 
   services/
     analytics.js                     The single seam to PostHog -- see docs/ANALYTICS.md
-    viral.js                         Builds the spoiler-safe share text and copies it to the clipboard
+    viral.js                         Builds the spoiler-safe share text (rank, date, pegs, mode, tries, link) and copies it to the clipboard
 
   workers/
     puzzleAnalysisWorker.js          Runs the difficulty scorers off the main thread for the admin grid

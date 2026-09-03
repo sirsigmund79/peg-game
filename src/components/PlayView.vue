@@ -351,6 +351,7 @@ const shareText = computed(() =>
     formattedDate: formattedDate.value,
     rank: game.value.rank.rank,
     tries: game.value.tries,
+    proMode: game.value.proRound,
   })
 );
 
