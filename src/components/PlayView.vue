@@ -52,13 +52,11 @@ import { vibrateBadgeUnlock } from '../fx/haptics.js';
 import { takeBadgeBacklogWelcome, getBadgeDefinitions } from '../logic/badgeUnlocks.js';
 import { EVENTS, track } from '../services/analytics.js';
 import { useGhostOutline } from '../composables/useGhostOutline.js';
-import { useProMode } from '../composables/useProMode.js';
 import { useDevPanels } from '../composables/useDevPanels.js';
 import Board from './Board.vue';
 import StatBar from './StatBar.vue';
 import Controls from './Controls.vue';
 import GhostToggle from './GhostToggle.vue';
-import ProModeToggle from './ProModeToggle.vue';
 import ResultHeader from './ResultHeader.vue';
 import ResultStreakPill from './ResultStreakPill.vue';
 import DotsLeftOnBoard from './DotsLeftOnBoard.vue';
@@ -80,7 +78,6 @@ const isDevBuild = import.meta.env.DEV;
 
 const { route } = useRouter();
 const { ghost } = useGhostOutline();
-const { pro } = useProMode();
 const { devPanels } = useDevPanels();
 
 /** Figures out which puzzle to load: a hand-off from the editor, a specific "#/play/N", or today's. */
@@ -162,7 +159,7 @@ const RESULT_HOLD_MS = 800;
 // mid-shrink.
 const BOARD_SHRINK_MS = 400;
 const showResult = ref(false);
-// ArchiveDayStrip.vue (the archive callout below Undo/Reset) comes in as
+// ArchiveDayStrip.vue (the archive callout below Reset) comes in as
 // soon as the board has shrunk down to its result-card size -- see
 // activateResult() below -- rather than waiting on the score count-up/rank
 // pop reveal (see composables/useResultReveal.js), which can run for
@@ -351,7 +348,6 @@ const shareText = computed(() =>
     formattedDate: formattedDate.value,
     rank: game.value.rank.rank,
     tries: game.value.tries,
-    proMode: game.value.proRound,
   })
 );
 
@@ -387,7 +383,7 @@ onBeforeUnmount(() => {
 
         <div class="result-group" :class="{ 'with-divider': showResult }">
           <div class="game-area">
-            <StatBar v-if="!showResult" :pegs-remaining="game.pegsRemaining" :move-count="game.state.moveCount" :par="game.par" />
+            <StatBar v-if="!showResult" :pegs-remaining="game.pegsRemaining" :par="game.par" />
             <ResultHeader v-else :record="game.rank" :quip="game.quip" :revealed="reveal.rankRevealed" />
 
             <Board
@@ -508,15 +504,8 @@ onBeforeUnmount(() => {
     </div>
 
     <GhostToggle v-if="ghost.flagEnabled && ghost.discovered && !game.roundOver" />
-    <!-- Directly above the strip it changes, so turning it on visibly takes
-         the Undo button away rather than changing something off-screen. -->
-    <ProModeToggle v-if="!game.roundOver" />
     <Controls
       v-if="!game.roundOver"
-      :can-undo="game.state.undoStack.length > 0"
-      :round-over="game.roundOver"
-      :pro-mode="pro.enabled"
-      @undo="game.undo()"
       @reset="game.reset()"
     />
 

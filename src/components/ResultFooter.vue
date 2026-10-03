@@ -74,8 +74,8 @@ async function handleShareClick() {
 /* Challenge A Friend and Reset sit side by side on the result screen, styled
    differently from each other so they read as "the main thing" (share,
    solid-filled) vs. "the other option" (reset, outlined) -- the same
-   solid/outline pairing components/Controls.vue uses for Reset/Undo during
-   play. */
+   solid/outline pairing components/Controls.vue used to use for Reset/Undo
+   during play. */
 .result-actions {
   display: flex;
   gap: 12px;

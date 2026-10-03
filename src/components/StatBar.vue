@@ -3,7 +3,7 @@
   components/StatBar.vue
   ----------------------------------------------------------------------------
   A single compact row of stats above the board: how many pegs of each
-  color are left, how many moves have been made, and the target (par) the
+  color are left and the target (par) the
   player is trying to reach, per color. Pure display -- all the numbers
   come in as props from whatever useGame() instance is currently active.
 
@@ -18,7 +18,6 @@ import { getPegColor } from '../logic/pegColors.js';
 
 defineProps({
   pegsRemaining: { type: Array, required: true },
-  moveCount: { type: Number, required: true },
   par: { type: Array, required: true },
 });
 </script>
@@ -32,10 +31,6 @@ defineProps({
         </span>
       </span>
       <span class="stat-label">Left</span>
-    </div>
-    <div class="stat">
-      <span class="stat-value">{{ moveCount }}</span>
-      <span class="stat-label">Moves</span>
     </div>
     <div class="stat">
       <span class="stat-value multi">

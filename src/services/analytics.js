@@ -24,7 +24,6 @@ import { isGhostBaselineCaptured, markGhostBaselineCaptured } from '../logic/gho
 export const EVENTS = {
   PUZZLE_STARTED: 'puzzle_started',
   PUZZLE_FIRST_MOVE: 'puzzle_first_move',
-  PUZZLE_UNDO_USED: 'puzzle_undo_used',
   PUZZLE_RESET_USED: 'puzzle_reset_used',
   PUZZLE_COMPLETED: 'puzzle_completed',
   PUZZLE_LEFT_INCOMPLETE: 'puzzle_left_incomplete',
@@ -53,10 +52,6 @@ export const EVENTS = {
   BADGE_CARD_CLICKED: 'badge_card_clicked',
   BADGE_BACKLOG_CARD_CLICKED: 'badge_backlog_card_clicked',
   GHOST_OUTLINE_BASELINE_CAPTURED: 'ghost_outline_baseline_captured',
-  // Pro mode (see logic/proMode.js) -- fires on each flip, carrying the value
-  // it was flipped TO, so "how many players turn it on and how many turn it
-  // back off again" is answerable from one event.
-  PRO_MODE_CHANGED: 'pro_mode_changed',
   HOW_TO_PLAY_SHOWN: 'how_to_play_shown',
   HOW_TO_PLAY_STEP_VIEWED: 'how_to_play_step_viewed',
   HOW_TO_PLAY_DISMISSED: 'how_to_play_dismissed',

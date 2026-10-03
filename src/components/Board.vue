@@ -440,8 +440,8 @@ defineExpose({ getRootRect });
    only the result copy further down the page (which may be off-screen).
    Bound directly to the `round-over` class rather than a timed flag: CSS
    animations already only play once when a class is freshly applied, and
-   Undo can legitimately take the round back out of "over", so re-ending it
-   later re-triggers this exactly the same way. */
+   a Reset takes the round back out of "over", so ending it again later
+   re-triggers this exactly the same way. */
 .board.round-over {
   animation: board-settle 0.5s ease-out;
 }

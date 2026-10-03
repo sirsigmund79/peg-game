@@ -2,37 +2,17 @@
   ============================================================================
   components/Controls.vue
   ----------------------------------------------------------------------------
-  The ergonomic utility zone: Undo and Reset, the only two ways to correct
-  a mistake (unlimited undo, or start the round over -- there is no
-  in-game Hint button). Lives in its own bottom strip so it always sits in
+  The ergonomic utility zone: Reset, the only way to correct a mistake
+  (there is no Undo and no in-game Hint button -- every jump is final). Lives in its own bottom strip so it always sits in
   natural mobile thumb-reach, below the board and stats.
-
-  In Pro mode (see logic/proMode.js) Undo is gone and Reset is the whole
-  strip, which is the point of the setting.
   ============================================================================
 -->
 <script setup>
-defineProps({
-  canUndo: { type: Boolean, required: true },
-  // Once the round is over there's nothing left to undo back into (the
-  // board is done, not just paused) -- Undo disappears entirely rather
-  // than sitting there disabled, so Reset (the only way to keep playing)
-  // is the one obvious action left.
-  roundOver: { type: Boolean, required: true },
-  // Pro mode: Undo is removed the same way, for the same reason. A greyed-out
-  // Undo would still read as "there is a safety net here, just not right now";
-  // the player asked for there to be no safety net.
-  proMode: { type: Boolean, default: false },
-});
-
-const emit = defineEmits(['undo', 'reset']);
+const emit = defineEmits(['reset']);
 </script>
 
 <template>
   <div class="utility-zone">
-    <button v-if="!roundOver && !proMode" type="button" class="control-button outline" :disabled="!canUndo" @click="emit('undo')">
-      Undo
-    </button>
     <button type="button" class="control-button solid" @click="emit('reset')">Reset</button>
   </div>
 </template>
@@ -62,22 +42,9 @@ const emit = defineEmits(['undo', 'reset']);
   cursor: pointer;
   transition:
     background-color 0.15s ease,
-    border-color 0.15s ease,
-    opacity 0.15s ease;
+    border-color 0.15s ease;
 }
 
-.control-button.outline {
-  color: var(--color-accent);
-  background: transparent;
-  border-color: var(--color-accent);
-}
-
-.control-button.outline:disabled {
-  color: var(--color-ink-dim);
-  border-color: var(--color-card-border);
-  opacity: 0.6;
-  cursor: not-allowed;
-}
 
 .control-button.solid {
   color: var(--color-card-bg);
@@ -90,11 +57,6 @@ const emit = defineEmits(['undo', 'reset']);
    lands elsewhere, so an unguarded :hover here would leave the button stuck
    looking pressed after every tap. */
 @media (hover: hover) {
-  .control-button.outline:not(:disabled):hover {
-    background: var(--color-accent);
-    color: var(--color-card-bg);
-  }
-
   .control-button.solid:hover {
     background: var(--color-ink);
     border-color: var(--color-ink);
