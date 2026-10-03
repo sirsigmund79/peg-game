@@ -15,17 +15,6 @@
 //
 // Keyed by puzzle NUMBER, like the other two, and never recorded for custom
 // editor or story designs (those have puzzleNumber === null).
-//
-// Also carries whether that finished round was played in Pro mode (see
-// logic/proMode.js), because the share text names the mode and has to name
-// the one the board was actually PLAYED with -- a result screen resumed
-// after a reload must not start claiming Pro just because the toggle happens
-// to read Pro now. This store is the right home for it: it lives and dies
-// with exactly the round the result screen is showing.
-//
-// Entries written before Pro mode existed are a bare array of mask strings
-// rather than an object, so every read below accepts both shapes and treats
-// the old one as "not Pro" -- which it necessarily was.
 // ============================================================================
 
 import { safeGet, safeSet } from './storage.js';
@@ -36,34 +25,14 @@ function getStore() {
   return safeGet(ROUND_STATE_KEY, {});
 }
 
-/** Reads one entry in either shape, or undefined. See this file's header. */
-function readEntry(puzzleNumber) {
-  const stored = getStore()[puzzleNumber];
-  if (!stored) return undefined;
-  if (Array.isArray(stored)) return { masks: stored, pro: false };
-  if (!Array.isArray(stored.masks)) return undefined;
-  return { masks: stored.masks, pro: Boolean(stored.pro) };
-}
-
 /**
  * @param {number} puzzleNumber
  * @returns {bigint[] | undefined} the masks the puzzle was left on when its
  *   most recent round finished, if it's currently sitting in that state.
  */
 export function getFinishedMasks(puzzleNumber) {
-  const entry = readEntry(puzzleNumber);
-  return entry ? entry.masks.map((mask) => BigInt(mask)) : undefined;
-}
-
-/**
- * @param {number} puzzleNumber
- * @returns {boolean} whether the finished round currently being resumed was
- *   played in Pro mode. False when there's nothing stored, and false for
- *   entries written before Pro mode existed.
- */
-export function getFinishedInProMode(puzzleNumber) {
-  const entry = readEntry(puzzleNumber);
-  return entry ? entry.pro : false;
+  const stored = getStore()[puzzleNumber];
+  return stored ? stored.map((mask) => BigInt(mask)) : undefined;
 }
 
 /**
@@ -72,14 +41,10 @@ export function getFinishedInProMode(puzzleNumber) {
  *
  * @param {number} puzzleNumber
  * @param {bigint[]} masks
- * @param {boolean} [playedInProMode] - whether this round was played in Pro mode
  */
-export function recordRoundFinished(puzzleNumber, masks, playedInProMode = false) {
+export function recordRoundFinished(puzzleNumber, masks) {
   const store = getStore();
-  store[puzzleNumber] = {
-    masks: masks.map((mask) => mask.toString()),
-    pro: Boolean(playedInProMode),
-  };
+  store[puzzleNumber] = masks.map((mask) => mask.toString());
   safeSet(ROUND_STATE_KEY, store);
 }
 

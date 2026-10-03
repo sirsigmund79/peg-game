@@ -31,7 +31,7 @@ import { vibrateJump, vibrateRoundOver, vibrateInvalid } from '../fx/haptics.js'
 import { playRoundOverChime } from '../fx/sound.js';
 import { recordResult, getResultForPuzzle } from '../logic/history.js';
 import { getBestForPuzzle, recordBestIfBetter } from '../logic/bestResults.js';
-import { getFinishedMasks, getFinishedInProMode, recordRoundFinished, clearRoundFinished } from '../logic/roundState.js';
+import { getFinishedMasks, recordRoundFinished, clearRoundFinished } from '../logic/roundState.js';
 import { isSolutionLocked, lockSolution as persistSolutionLock } from '../logic/solutionLock.js';
 import {
   recordPegCleared,
@@ -48,7 +48,6 @@ import { isGiveUpReset } from '../logic/attemptBoundary.js';
 import { checkForNewlyUnlockedBadges } from '../logic/badgeUnlocks.js';
 import { encodeMasks, moveKey, getSeenMoveKeys, recordMoveSeen } from '../logic/ghostMoves.js';
 import { useGhostOutline } from './useGhostOutline.js';
-import { useProMode } from './useProMode.js';
 import { EVENTS, track, syncPlayerStatsToPostHog } from '../services/analytics.js';
 
 function sum(numbers) {
@@ -74,7 +73,6 @@ export function useGame(puzzle, options = {}) {
   const source = options.source ?? 'daily';
   const ephemeral = options.ephemeral ?? false;
   const { ghost } = useGhostOutline();
-  const { pro } = useProMode();
 
   // The percentage denominator every rank on this puzzle is measured against
   // (see logic/rules.js) -- fixed for the whole puzzle, so compute it once.
@@ -116,29 +114,6 @@ export function useGame(puzzle, options = {}) {
     // always starts them clean.
     undoCount: 0,
     resetCount: 0,
-    // The two halves of "was this attempt played in Pro mode" -- what the
-    // share text names, and the reason it can be trusted.
-    //
-    // `proSpoiled` is a one-way latch over the attempt: it goes true the
-    // moment a jump is taken with Pro off (the Undo button was sitting right
-    // there for that move) or an Undo is actually taken, and only reset()
-    // clears it. It is deliberately NOT seeded from the toggle at load: the
-    // ordinary way to start a Pro round is to open the puzzle and then flip
-    // the switch, so anything decided before the first jump would be
-    // deciding it too early.
-    //
-    // `proRound` is the settled answer, written once when the round ends and
-    // then read by the share text. Doing it at the end rather than live is
-    // what stops a toggle flipped on the result screen from rewriting a
-    // finished board's history -- and stops one flipped off there from
-    // taking away a Pro round that was genuinely earned.
-    proSpoiled: false,
-    // Seeded from the stored round when a finished result screen is being
-    // resumed (see logic/roundState.js), so a reload reports the mode the
-    // board was played with rather than the mode the toggle reads now.
-    proRound: restoredMasks && puzzle.puzzleNumber != null
-      ? getFinishedInProMode(puzzle.puzzleNumber)
-      : false,
     // Ghost Outline analytics-only bookkeeping (see logic/featureFlags.js
     // and services/analytics.js) -- same "not reset by reset()" treatment
     // as undoCount/resetCount above, since these are meant to answer "for
@@ -368,9 +343,6 @@ export function useGame(puzzle, options = {}) {
       }
       recordMoveSeen(puzzle.puzzleNumber, stateKeyBeforeJump, takenKey);
     }
-    // Any jump taken while Pro is off means this was not a Pro attempt --
-    // the Undo button was sitting right there for that move.
-    if (!pro.enabled) state.proSpoiled = true;
     state.undoStack.push(state.masks);
     state.masks = applyMove(state.masks, move);
     if (puzzle.puzzleNumber !== null) recordPegCleared(clearedColor);
@@ -395,17 +367,13 @@ export function useGame(puzzle, options = {}) {
       const won = finalPegsRemaining.every((count, colorIndex) => count === puzzle.par[colorIndex]);
       playRoundOverChime();
       const overParAtEnd = sum(finalPegsRemaining) - sum(puzzle.par);
-      // Settle the mode for this attempt while the board that earned it is
-      // still the one on screen. `moveCount > 0` because an attempt with no
-      // jumps in it has denied itself nothing.
-      state.proRound = !state.proSpoiled && state.moveCount > 0;
       // Custom editor designs (puzzleNumber === null) aren't real daily
       // puzzles, so components/ArchiveView.vue has nothing to show for
       // them -- there's nothing worth recording.
       if (puzzle.puzzleNumber !== null) {
         recordResult(puzzle.puzzleNumber, { pegsRemaining: finalPegsRemaining, overPar: overParAtEnd, won });
         recordBestIfBetter(puzzle.puzzleNumber, { pegsRemaining: finalPegsRemaining, overPar: overParAtEnd, won, masks: state.masks });
-        recordRoundFinished(puzzle.puzzleNumber, state.masks, state.proRound);
+        recordRoundFinished(puzzle.puzzleNumber, state.masks);
         syncPlayerStatsToPostHog();
 
         // A "new best" means this attempt reached a strictly HIGHER RANK
@@ -482,12 +450,6 @@ export function useGame(puzzle, options = {}) {
     // memory, so One and Done can still see an Undo taken on an earlier
     // attempt -- or in an earlier visit entirely.
     if (puzzle.puzzleNumber !== null) recordUndo(puzzle.puzzleNumber);
-    // Belt and braces alongside the check in jump(): an Undo is the one thing
-    // Pro mode exists to rule out, so taking one spoils the attempt whatever
-    // the toggle read on the way here. Sticky for the rest of the attempt --
-    // undoing back to an empty board and setting off again in Pro is still an
-    // attempt that used Undo.
-    state.proSpoiled = true;
     state.masks = state.undoStack.pop();
     state.moveCount = Math.max(0, state.moveCount - 1);
     state.selectedHole = null;
@@ -570,12 +532,6 @@ export function useGame(puzzle, options = {}) {
     state.lastMove = null;
     state.undoStack = [];
     state.moveCount = 0;
-    // A fresh attempt gets a clean slate on both counts -- unlike
-    // undoCount/resetCount above, these describe one attempt, not the whole
-    // day on this puzzle. An Undo taken before this Reset does not follow the
-    // player into the new attempt.
-    state.proSpoiled = false;
-    state.proRound = false;
     state.roundStartedAt = Date.now();
     state.justAchievedNewBest = false;
     // Roll the just-finished attempt's result (if it raised the bar) into
@@ -641,10 +597,6 @@ export function useGame(puzzle, options = {}) {
     // screen's Reset button. See the state field above for why this one
     // deliberately leaves reset() itself alone.
     geniusLocked: computed(() => state.geniusLocked),
-    // Whether the attempt being shown was played in Pro mode start to finish
-    // -- components/PlayView.vue feeds this to the share text. See the state
-    // field above for why it's a latch rather than a live read of the toggle.
-    proRound: computed(() => state.proRound),
     holeHasPeg,
     getHoleColor,
     selectHole,
