@@ -6,9 +6,6 @@
   a mistake (unlimited undo, or start the round over -- there is no
   in-game Hint button). Lives in its own bottom strip so it always sits in
   natural mobile thumb-reach, below the board and stats.
-
-  In Pro mode (see logic/proMode.js) Undo is gone and Reset is the whole
-  strip, which is the point of the setting.
   ============================================================================
 -->
 <script setup>
@@ -19,10 +16,6 @@ defineProps({
   // than sitting there disabled, so Reset (the only way to keep playing)
   // is the one obvious action left.
   roundOver: { type: Boolean, required: true },
-  // Pro mode: Undo is removed the same way, for the same reason. A greyed-out
-  // Undo would still read as "there is a safety net here, just not right now";
-  // the player asked for there to be no safety net.
-  proMode: { type: Boolean, default: false },
 });
 
 const emit = defineEmits(['undo', 'reset']);
@@ -30,7 +23,7 @@ const emit = defineEmits(['undo', 'reset']);
 
 <template>
   <div class="utility-zone">
-    <button v-if="!roundOver && !proMode" type="button" class="control-button outline" :disabled="!canUndo" @click="emit('undo')">
+    <button v-if="!roundOver" type="button" class="control-button outline" :disabled="!canUndo" @click="emit('undo')">
       Undo
     </button>
     <button type="button" class="control-button solid" @click="emit('reset')">Reset</button>
