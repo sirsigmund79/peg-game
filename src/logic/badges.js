@@ -86,7 +86,7 @@ export const BADGE_DEFINITIONS = [
     id: 'one_and_done',
     name: 'One and Done',
     icon: '✨',
-    description: 'Reach GENIUS on your first try at a puzzle, with no Undos.',
+    description: 'Reach GENIUS on your first try at a puzzle.',
     rare: true,
     isUnlocked: (stats) => stats.oneAndDonePuzzleIds.length > 0,
   },

@@ -24,7 +24,6 @@ import { isGhostBaselineCaptured, markGhostBaselineCaptured } from '../logic/gho
 export const EVENTS = {
   PUZZLE_STARTED: 'puzzle_started',
   PUZZLE_FIRST_MOVE: 'puzzle_first_move',
-  PUZZLE_UNDO_USED: 'puzzle_undo_used',
   PUZZLE_RESET_USED: 'puzzle_reset_used',
   PUZZLE_COMPLETED: 'puzzle_completed',
   PUZZLE_LEFT_INCOMPLETE: 'puzzle_left_incomplete',

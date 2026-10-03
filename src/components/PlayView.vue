@@ -159,7 +159,7 @@ const RESULT_HOLD_MS = 800;
 // mid-shrink.
 const BOARD_SHRINK_MS = 400;
 const showResult = ref(false);
-// ArchiveDayStrip.vue (the archive callout below Undo/Reset) comes in as
+// ArchiveDayStrip.vue (the archive callout below Reset) comes in as
 // soon as the board has shrunk down to its result-card size -- see
 // activateResult() below -- rather than waiting on the score count-up/rank
 // pop reveal (see composables/useResultReveal.js), which can run for
@@ -383,7 +383,7 @@ onBeforeUnmount(() => {
 
         <div class="result-group" :class="{ 'with-divider': showResult }">
           <div class="game-area">
-            <StatBar v-if="!showResult" :pegs-remaining="game.pegsRemaining" :move-count="game.state.moveCount" :par="game.par" />
+            <StatBar v-if="!showResult" :pegs-remaining="game.pegsRemaining" :par="game.par" />
             <ResultHeader v-else :record="game.rank" :quip="game.quip" :revealed="reveal.rankRevealed" />
 
             <Board
@@ -506,9 +506,6 @@ onBeforeUnmount(() => {
     <GhostToggle v-if="ghost.flagEnabled && ghost.discovered && !game.roundOver" />
     <Controls
       v-if="!game.roundOver"
-      :can-undo="game.state.undoStack.length > 0"
-      :round-over="game.roundOver"
-      @undo="game.undo()"
       @reset="game.reset()"
     />
 

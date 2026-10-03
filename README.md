@@ -241,7 +241,7 @@ src/
                                      Editor-design <-> board conversion, and the admin grid's drag-to-swap relabeling logic
 
   composables/                      Small reactive state holders that connect logic -> screen
-    useGame.js                      One playable round: current board, selection, undo stack, win state, analytics
+    useGame.js                      One playable round: current board, selection, move history, win state, analytics
     useTheme.js                     The active theme's colors/fonts, applied as CSS variables
     useRouter.js                    A deliberately tiny hash-based router (no vue-router dependency)
     usePendingPuzzle.js             One-shot hand-off of a custom design from the editor to PlayView.vue
@@ -254,7 +254,7 @@ src/
     Board.vue                       Draws holes + pegs, positions them, animates jumps, handles taps -- also becomes the result screen's mini board
     PuzzleGlyph.vue                 Small pointillist puzzle preview used by the archive
     StatBar.vue                     Pegs left / moves / target chips above the board
-    Controls.vue                    Undo + Reset buttons
+    Controls.vue                    Reset button
     GhostToggle.vue                 Ghost Outline's beneath-the-board on/off toggle (see "Ghost Outline" above)
     ResultHeader.vue / DotsLeftOnBoard.vue / RankLadder.vue / ResultFooter.vue
                                      Result screen: rank header, dots-left tally (with inline Goal), rank ladder, share + reset
@@ -317,6 +317,6 @@ vite-plugins/
   permanently frozen historical record, before ever falling back to the
   (periodically-refreshed, currently smaller) pool. See "How never repeats
   actually works" above for why.
-- **There is no in-game hint.** The only ways to recover from a bad move are
-  Undo (unlimited), Reset, and (once launched) Ghost Outline's "have I tried
-  this before" memory aid -- never a hint about which move is actually good.
+- **There is no in-game hint, and no Undo.** The only ways to recover from a bad
+  move are Reset and (once launched) Ghost Outline's "have I tried this before"
+  memory aid -- never a hint about which move is actually good.

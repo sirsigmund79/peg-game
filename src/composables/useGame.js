@@ -3,11 +3,11 @@
 // ----------------------------------------------------------------------------
 // This is the bridge between the pure game logic (logic/rules.js) and the
 // screen. It holds the CURRENT state of one round being played -- which
-// pegs (and which colors) are on the board, what's selected, the undo
+// pegs (and which colors) are on the board, what's selected, the move
 // history, move count, and whether the round has been won.
 //
 // Vue components (like Board.vue) read this state to know what to draw, and
-// call its functions (selectHole, undo, reset) in response to taps. This
+// call its functions (selectHole, reset) in response to taps. This
 // file itself never touches the DOM -- that's what makes it a "composable"
 // instead of a component.
 // ============================================================================
@@ -38,7 +38,6 @@ import {
   recordPlaythroughEnded,
   recordGiveUpReset,
   recordGeniusReached,
-  recordUndo,
   recordResetPressed,
   recordRankReached,
   getAttemptsForPuzzle,
@@ -96,7 +95,7 @@ export function useGame(puzzle, options = {}) {
   const state = reactive({
     masks: restoredMasks ?? startingMasks, // which holes currently have a peg, one bigint bitmask per color
     selectedHole: null, // index of the peg the player has tapped, or null
-    undoStack: [], // previous masks arrays, so Undo can step backward
+    undoStack: [], // previous masks arrays -- the move-by-move history (there is no Undo; Reset clears it)
     moveCount: 0,
     // The most recent jump's {from, over, to}, or null. A fresh object
     // every time (never mutated in place) so Board.vue can watch it and
@@ -112,11 +111,10 @@ export function useGame(puzzle, options = {}) {
     // event) -- kept here rather than as loose module-level variables so a
     // fresh useGame() call (a new puzzle, or a re-visit of the same one)
     // always starts them clean.
-    undoCount: 0,
     resetCount: 0,
     // Ghost Outline analytics-only bookkeeping (see logic/featureFlags.js
     // and services/analytics.js) -- same "not reset by reset()" treatment
-    // as undoCount/resetCount above, since these are meant to answer "for
+    // as resetCount above, since these are meant to answer "for
     // this PUZZLE today" (spanning every give-up Reset), not "this single
     // attempt."
     repeatMoveCount: 0, // jumps that repeated an already-seen (state, move) pair today
@@ -176,7 +174,7 @@ export function useGame(puzzle, options = {}) {
     // Seeded from storage so it survives a reload or an archive revisit, and
     // set again the moment a Genius round ends (see jump() below). Unlike
     // `solutionLocked`, this does NOT make reset() itself a no-op: the
-    // mid-round Undo/Reset strip stays fully usable, since a player part-way
+    // mid-round Reset strip stays fully usable, since a player part-way
     // through a board still needs a way to start it over.
     geniusLocked: puzzle.puzzleNumber != null ? hasReachedGenius(puzzle.puzzleNumber) : false,
   });
@@ -312,7 +310,7 @@ export function useGame(puzzle, options = {}) {
 
   /**
    * Applies a jump: removes the jumped peg, moves the jumping peg, records
-   * history for Undo, and clears the current selection.
+   * history, and clears the current selection.
    *
    * @param {{from:number, over:number, to:number}} move
    */
@@ -429,7 +427,6 @@ export function useGame(puzzle, options = {}) {
           over_par: overParAtEnd,
           completion_percent: Math.round(getCompletionPercent(overParAtEnd, removable)),
           move_count: state.moveCount,
-          undo_count: state.undoCount,
           reset_count: state.resetCount,
           duration_ms: Date.now() - state.roundStartedAt,
           source,
@@ -439,21 +436,6 @@ export function useGame(puzzle, options = {}) {
         });
       }
     }
-  }
-
-  /** Undoes the most recent jump, if there is one. Unlimited undos. */
-  function undo() {
-    if (state.undoStack.length === 0) return;
-    track(EVENTS.PUZZLE_UNDO_USED, { puzzle_number: puzzle.puzzleNumber ?? null, move_count_before_undo: state.moveCount });
-    state.undoCount += 1;
-    // Persisted per puzzle (see logic/badgeStats.js) rather than counted in
-    // memory, so One and Done can still see an Undo taken on an earlier
-    // attempt -- or in an earlier visit entirely.
-    if (puzzle.puzzleNumber !== null) recordUndo(puzzle.puzzleNumber);
-    state.masks = state.undoStack.pop();
-    state.moveCount = Math.max(0, state.moveCount - 1);
-    state.selectedHole = null;
-    state.lastMove = null;
   }
 
   /**
@@ -601,7 +583,6 @@ export function useGame(puzzle, options = {}) {
     getHoleColor,
     selectHole,
     deselect,
-    undo,
     reset,
     lockSolution,
     takeBadgeUnlocks,

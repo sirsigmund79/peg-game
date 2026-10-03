@@ -38,7 +38,7 @@ centralizes sharing. Two ground rules shaped what's here:
 
 - **No per-move events.** A round involves dozens of taps; firing an event
   per tap would burn quota for no analytical payoff nobody asked for. Move
-  count, undo count, and reset count are accumulated in
+  count and reset count are accumulated in
   `composables/useGame.js`'s state and attached as *properties* on the
   round-level events below instead.
 - **No accounts, so no PII, and no `identify()` calls.** Every player is
@@ -60,9 +60,8 @@ dev-vs-production split `app_env` already covers.
 | `$pageview` (manual) | Any route change (`App.vue`) | `page`, `puzzle_number` |
 | `puzzle_started` | A round is created (`useGame.js`) | `puzzle_number`, `puzzle_date`, `board_shape`, `color_count`, `par_total`, `source` (`daily`\|`link`\|`custom`), `already_played` |
 | `puzzle_first_move` | First jump of a round | `puzzle_number` |
-| `puzzle_undo_used` | Undo pressed | `puzzle_number`, `move_count_before_undo` |
 | `puzzle_reset_used` | Reset pressed after ≥1 move | `puzzle_number`, `move_count_before_reset`, `repeat_move_count`, `cumulative_move_count`, `ghost_outline_used` |
-| `puzzle_completed` | Round ends, any outcome | `puzzle_number`, `puzzle_date`, `board_shape`, `color_count`, `won`, `rank`, `over_par`, `completion_percent`, `move_count`, `undo_count`, `reset_count`, `duration_ms`, `source`, `repeat_move_count`, `cumulative_move_count`, `ghost_outline_used` |
+| `puzzle_completed` | Round ends, any outcome | `puzzle_number`, `puzzle_date`, `board_shape`, `color_count`, `won`, `rank`, `over_par`, `completion_percent`, `move_count`, `reset_count`, `duration_ms`, `source`, `repeat_move_count`, `cumulative_move_count`, `ghost_outline_used` |
 | `puzzle_left_incomplete` | Player leaves mid-round (route away, tab hidden, or tab closed) — fires once per round | `puzzle_number`, `move_count`, `time_spent_ms`, `repeat_move_count`, `cumulative_move_count`, `ghost_outline_used` |
 | `share_clicked` | "Challenge A Friend" tapped | `puzzle_number`, `rank`, `won`, `over_par` |
 | `share_copy_result` | Clipboard copy resolves | `puzzle_number`, `success` |
@@ -173,7 +172,7 @@ damage to retention.
 - Trend: win rate (`puzzle_completed` where `won = true`, as % of all
   `puzzle_completed`).
 - Trend: average `over_par` on `puzzle_completed`.
-- Trend: `puzzle_undo_used` and `puzzle_reset_used` counts per
+- Trend: `puzzle_reset_used` counts per
   `puzzle_completed` (a rough "friction per round" ratio).
 
 **Success looks like:** completion rate stable or rising across every

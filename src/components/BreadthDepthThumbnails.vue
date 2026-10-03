@@ -13,7 +13,7 @@
   Reads the move history straight off useGame.js's own undo stack (`masks`
   BEFORE each jump, plus the live current `masks`) rather than tracking a
   separate history -- that stack already IS the full move-by-move record,
-  and naturally shortens on Undo and clears on Reset for free.
+  and naturally clears on Reset for free.
 
   IMPORTANT: only ever imported where `import.meta.env.DEV` is true (see
   PlayView.vue) -- never ships to real players.

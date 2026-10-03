@@ -57,7 +57,7 @@ export function planFullSolution(geometry, startingMasks) {
 /**
  * Plans the best solution from `game`'s CURRENT position, then plays it
  * out for real, one jump at a time, by calling game.selectHole() the same
- * way a real tap would -- so undo, haptics, and win detection all work
+ * way a real tap would -- so move history, haptics, and win detection all work
  * exactly like they would for a human player.
  *
  * @param {object} game - a useGame() instance
